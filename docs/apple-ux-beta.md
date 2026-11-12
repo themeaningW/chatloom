@@ -20,6 +20,12 @@ data were checked in [dark](ux/apple/label-editor-dark.png) and
 keyboard insets are covered by widget tests; physical iPhone acceptance and
 real cross-device sync remain pending.
 
+The Windows xcross release of `ae4abb8` completed as **2.10.0 (3573)**.
+Bundle version, label editor code, private bridge endpoint and the generated
+notification delegate hook were verified. The artifact is ready for the
+existing installer, but has not been installed on the physical iPhone.
+The previously documented dSYM and Share extension limits remain.
+
 ## Merged-draft follow-up (build 3570)
 
 The inbox preview and Drafts filter now read the same draft as the conversation
