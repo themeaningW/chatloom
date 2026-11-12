@@ -63,7 +63,8 @@ record those checks separately for each device and network.
 The logo, app icons, splash images and notification icon are rendered from
 the SVGs in [docs/brand/](brand/BRAND.md) with
 `python3 scripts/brand/generate-icons.py` (needs one SVG renderer: librsvg,
-ffmpeg with librsvg, or `cairosvg`). Do not edit the PNGs by hand.
+resvg, ffmpeg with librsvg, or `cairosvg`, plus Pillow for opaque RGB iOS
+icons). Do not edit the PNGs by hand.
 
 ## Feature notes
 

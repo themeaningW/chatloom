@@ -39,6 +39,14 @@ caching and notification presentation still need iPhone acceptance. See
 The separate presentation harness still lacks its external source-snapshot
 prerequisite; the captures above use actual production widget fixtures.
 
+The Windows xcross release of `a9b0401` completed as **2.10.0 (3580)**.
+The staged bundle contains all 14 explicit icon PNGs with matching iPhone/iPad
+metadata and byte-identical source artwork. Composer/retained-feature markers,
+the bridge endpoint and native notification/shake hooks were verified in AOT
+and the runner. This artifact has not been installed on the physical iPhone.
+Swift/Xcode compilation remains unverified here; the existing dSYM and
+CocoaPods-only Share plugin limitations remain.
+
 ## GIF search input and compact controls (3579)
 
 GIF search previously disabled its entire text field until its provider was
