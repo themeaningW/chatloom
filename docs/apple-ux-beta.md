@@ -34,6 +34,14 @@ production inbox fixture was captured with search
 harness still lacks its external source-snapshot prerequisite; full-app
 fixtures supplied these captures. Physical-device acceptance remains pending.
 
+The Windows xcross release of `4cfb1ec` completed as **2.10.0 (3578)**.
+Version metadata, hidden-search/FAB keys, expanded icon-picker code and retained
+report screenshots were verified in AOT. The bridge endpoint, notification and
+shake hooks remain included, and the removed long-press thread preview remains
+absent. This artifact has not been installed on the physical iPhone. Actual
+device gestures and Swift/Xcode compilation remain unverified here; the known
+dSYM and CocoaPods-only Share plugin limitations remain.
+
 ## Automatic report screenshots (3577)
 
 Both shake and manual **Report a problem** capture the visible Flutter app
