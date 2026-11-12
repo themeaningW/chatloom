@@ -3,6 +3,23 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Shake to report (3575)
+
+Shaking the active, unlocked iPhone opens the same **Report a problem** sheet
+as the menu. **Settings → Advanced → Shake to report** toggles it; manual
+reporting remains available. It preserves editor contents, deduplicates
+manual/shake entry, ignores motion during background/lock and rejects old
+subscription envelopes after resume. No report or screenshot is sent automatically.
+
+The native UIKit window hook needs no motion sampling/plugin/permission.
+While enabled it replaces Shake to Undo; switching it off restores the previous
+iOS policy. Both Xcode and Windows xcross source paths include it; the generated
+notification delegate hook is preserved. See [implementation and acceptance](ios-shake-to-report.md).
+
+36 selected Flutter regressions and the scoped PowerShell runner-shim tests pass.
+Physical iPhone shake/startup/keyboard acceptance remains pending installation;
+the Windows build does not compile the Swift Xcode runner.
+
 ## iPhone interaction and feedback (3574)
 
 iOS keeps native Cupertino page navigation, including edge-back progress and

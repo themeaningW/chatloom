@@ -141,6 +141,7 @@ enum AppSettings<T> {
     'pl.personal.ios.notification_sound',
     true,
   ),
+  personalShakeToReport<bool>('pl.personal.ios.shake_to_report', true),
 
   /// Inbox encryption notice dismissed until its issues change: an account
   /// hash and issue signatures (see `E2eeNoticeDismissal`), no ids.

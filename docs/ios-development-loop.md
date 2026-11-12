@@ -6,6 +6,13 @@ shared client. A platform folder owns native integration, not a copy of chats.
 
 ## Report an issue from the phone
 
+Shake the unlocked, foreground iPhone app to open **Report a problem** directly,
+or use the menu path below. **Settings → Advanced → Shake to report** toggles
+this shortcut (on by default). While enabled in the active app it replaces
+Shake to Undo; switching it off restores the previous iOS shake-to-edit policy.
+Normal editing/undo controls remain. No report or screenshot is sent automatically.
+See [native behavior and validation limits](ios-shake-to-report.md).
+
 1. Open **Settings → Advanced → Report a problem**.
 2. Describe the steps, expected result and actual result. Tap **Copy report**.
 3. Paste it in the development conversation and attach a screenshot or a short

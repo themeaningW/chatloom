@@ -11,10 +11,12 @@ import 'package:chatloom/personal/ui/notion_settings_body.dart';
 import 'package:chatloom/personal/ui/notion_settings_load.dart';
 import 'package:chatloom/personal/ui/notion_settings_page.dart';
 import 'package:chatloom/personal/ui/performance_page.dart';
+import 'package:chatloom/personal/ui/shake_to_report.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/utils/platform_infos.dart';
 import 'package:chatloom/widgets/avatar.dart';
 import 'package:chatloom/widgets/matrix.dart';
+import 'package:chatloom/widgets/settings_switch_list_tile.dart';
 import 'package:chatloom/widgets/theme_builder.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -133,6 +135,12 @@ class _NotionSettingsAdapterState extends State<NotionSettingsAdapter> {
               title: 'Report a problem',
               onTap: () => showAppFeedback(context),
             ),
+            if (PlatformInfos.isIOS)
+              SettingsSwitchListTile.adaptive(
+                title: 'Shake to report',
+                setting: AppSettings.personalShakeToReport,
+                onChanged: shakeToReportPreferenceChanged,
+              ),
             const DeveloperOptionsSection(),
           ],
         ),

@@ -17,6 +17,15 @@ $originalSource = @'
   XcrossRegisterGeneratedPlugins(engineBridge.pluginRegistry);
 }
 @end
+@interface SceneDelegate : FlutterSceneDelegate
+@end
+@implementation SceneDelegate
+- (void)scene:(UIScene*)scene willConnectToSession:(UISceneSession*)session options:(UISceneConnectionOptions*)connectionOptions {
+  UIWindowScene* windowScene = (UIWindowScene*)scene;
+  UIWindow* window = [[UIWindow alloc] initWithWindowScene:windowScene];
+  self.window = window;
+}
+@end
 '@
 [IO.File]::WriteAllText($runnerSource, $originalSource)
 $fakeSource = Join-Path $fixtureRoot 'FakeClang.cs'
@@ -70,6 +79,31 @@ try {
     if ($patched -notmatch 'XcrossRegisterGeneratedPlugins\(engineBridge.pluginRegistry\);\r?\n\s*// ChatLoom[^\r\n]*\r?\n\s*\[\(UNUserNotificationCenter \*\)\[NSClassFromString\(@"UNUserNotificationCenter"\) currentNotificationCenter\] setDelegate:self\];') {
         throw 'The notification delegate was not restored after registration'
     }
+    if ($patched -notmatch 'setDelegate:self\];\r?\n\s*\[\[ChatLoomShakeBridge shared\] registerWithMessenger:engineBridge.applicationRegistrar.messenger\];' -or
+        $patched -notmatch 'UIWindow\* window = \[\[ChatLoomShakeWindow alloc\] initWithWindowScene:windowScene\];' -or
+        $patched -notmatch 'eventChannelWithName:@"chatloom/ios_shake"' -or
+        $patched -notmatch 'methodChannelWithName:@"chatloom/ios_shake/availability"' -or
+        $patched -notmatch 'isEqualToString:@"isAvailable"') {
+        throw 'Native shake channels or scene window were not installed'
+    }
+    if ($patched -notmatch 'UIApplicationStateActive' -or
+        $patched -notmatch 'self.isKeyWindow' -or
+        $patched -notmatch 'UISceneActivationStateForegroundActive' -or
+        $patched -notmatch 'previousShakeToEdit = @\(application.applicationSupportsShakeToEdit\)' -or
+        $patched -notmatch 'applicationSupportsShakeToEdit = self.previousShakeToEdit.boolValue' -or
+        $patched -notmatch '\[super sendEvent:event\];' -or
+        $patched -match 'becomeFirstResponder|CMMotionManager|method_exchangeImplementations') {
+        throw 'Native foreground/undo policy or responder preservation changed'
+    }
+    if ($patched -notmatch 'isKindOfClass:\[NSString class\]' -or
+        $patched -notmatch '\[\(NSString\*\)arguments length\] == 0' -or
+        $patched -notmatch 'errorWithCode:@"invalid_subscription"' -or
+        $patched -notmatch 'self.subscription = \(NSString\*\)arguments;' -or
+        $patched -notmatch 'sink\(@\{@"type": @"shake", @"subscription": subscription\}\);' -or
+        ([regex]::Matches($patched, 'self.subscription = nil;')).Count -ne 3 -or
+        $patched -match 'self.sink\(@"shake"\)') {
+        throw 'Native subscription nonce validation, cleanup or event envelope changed'
+    }
     & $shim @arguments
     if ($LASTEXITCODE -ne 0 -or [IO.File]::ReadAllText($runnerSource) -cne $patched) { throw 'Runner patch is not idempotent' }
     # xcross may regenerate this source for every build. The compile interception
@@ -77,6 +111,27 @@ try {
     [IO.File]::WriteAllText($runnerSource, $originalSource)
     & $shim @arguments
     if ($LASTEXITCODE -ne 0 -or [IO.File]::ReadAllText($runnerSource) -cne $patched) { throw 'Regenerated runner was not prepared' }
+    # Upgrade the notification-only generated source used by older betas.
+    $notificationOnly = $originalSource.Replace('#import <Flutter/Flutter.h>', "#import <Flutter/Flutter.h>`n#import <UserNotifications/UserNotifications.h>")
+    $notificationOnly = $notificationOnly.Replace('  XcrossRegisterGeneratedPlugins(engineBridge.pluginRegistry);', @'
+  XcrossRegisterGeneratedPlugins(engineBridge.pluginRegistry);
+  // ChatLoom: restore Flutter notification delegate after plugin registration.
+  [(UNUserNotificationCenter *)[NSClassFromString(@"UNUserNotificationCenter") currentNotificationCenter] setDelegate:self];
+'@)
+    # Use a consistent line ending, as a generated compilation unit does.
+    $notificationOnly = $notificationOnly.Replace("`r`n", "`n")
+    [IO.File]::WriteAllText($runnerSource, $notificationOnly)
+    & $shim @arguments
+    if ($LASTEXITCODE -ne 0 -or [IO.File]::ReadAllText($runnerSource).Replace("`r`n", "`n") -cne $patched.Replace("`r`n", "`n")) {
+        throw 'Notification-only runner did not gain the shake hook'
+    }
+    $crlfSource = $originalSource.Replace("`r`n", "`n").Replace("`n", "`r`n")
+    [IO.File]::WriteAllText($runnerSource, $crlfSource)
+    & $shim @arguments
+    $crlfPatched = [IO.File]::ReadAllText($runnerSource)
+    if ($LASTEXITCODE -ne 0 -or $crlfPatched.Replace("`r`n", "`n") -cne $patched.Replace("`r`n", "`n") -or
+        $crlfPatched.Replace("`r`n", '') -match "`n") { throw 'Runner/payload line endings changed' }
+    [IO.File]::WriteAllText($runnerSource, $patched)
     $link = @((Join-Path $runnerRoot 'Runner.o'), '-o', (Join-Path $runnerRoot 'Runner'))
     & $shim @link
     Assert-Arguments $link
@@ -115,11 +170,20 @@ try {
     & $shim --version
     if ($LASTEXITCODE -ne 23) { throw 'Compiler exit code was not forwarded' }
     $env:CHATLOOM_TEST_CLANG_EXIT = '0'
+    $unsupportedWindow = $originalSource.Replace('UIWindow* window = [[UIWindow alloc]', 'UIWindow* window = [[UnexpectedWindow alloc]')
+    [IO.File]::WriteAllText($runnerSource, $unsupportedWindow)
+    [IO.File]::WriteAllText($env:CHATLOOM_TEST_CLANG_ARGS, 'not invoked')
+    & $shim @arguments
+    if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($env:CHATLOOM_TEST_CLANG_ARGS) -cne 'not invoked' -or
+        [IO.File]::ReadAllText($runnerSource) -cne $unsupportedWindow) { throw 'Unknown window did not fail atomically before compiler invocation' }
+    [IO.File]::WriteAllText($runnerSource, $patched.Replace('chatloom/ios_shake', 'chatloom/ios_shake_broken'))
+    & $shim @arguments
+    if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($env:CHATLOOM_TEST_CLANG_ARGS) -cne 'not invoked') { throw 'Changed native payload did not fail before compiler invocation' }
     [IO.File]::WriteAllText($runnerSource, 'unsupported generated source')
     [IO.File]::WriteAllText($env:CHATLOOM_TEST_CLANG_ARGS, 'not invoked')
     & $shim @arguments
     if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($env:CHATLOOM_TEST_CLANG_ARGS) -cne 'not invoked') { throw 'Unsupported source did not fail before compiler invocation' }
-    Write-Output 'PASS: CC hook, exact argv/exit forwarding, scoped patch, regeneration, idempotence, unchanged linker arguments and unsupported-source rejection.'
+    Write-Output 'PASS: notification/shake channels, nonce envelope/cleanup, startup window, foreground/undo policy source, exact argv/exit forwarding, regeneration, notification-only upgrade, line endings, idempotence, unchanged linker arguments and unsupported-source rejection.'
 } finally {
     $env:CC = $previousCc
     $env:XCROSS_APPLE_TOOL_CLANG = $previousClang

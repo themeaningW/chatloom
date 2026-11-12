@@ -45,6 +45,12 @@ if (-not (Test-Path -LiteralPath $csc -PathType Leaf)) {
     throw 'The .NET Framework C# compiler is required to prepare the clang shim'
 }
 $runnerSource = Join-Path $runnerRoot 'Runner.m'
+$shakeSourcePath = Join-Path $PSScriptRoot '../../ios/Runner/ChatLoomShakeBridge.m.inc'
+if (-not (Test-Path -LiteralPath $shakeSourcePath -PathType Leaf) -or
+    ((Get-Item -LiteralPath $shakeSourcePath).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw 'Expected the unlinked native shake bridge source beside the iOS runner'
+}
+$shakeSource = [IO.File]::ReadAllText($shakeSourcePath)
 $source = @'
 using System;
 using System.Diagnostics;
@@ -57,6 +63,7 @@ internal static class ChatLoomClang {
     private static readonly string RealClang = Decode("__CLANG__");
     private static readonly string RunnerSource = Decode("__RUNNER__");
     private static readonly string SwiftPmCache = Decode("__SWIFTPM__");
+    private static readonly string ShakeSource = Decode("__SHAKE__");
     // flutter_local_notifications 22.3.1: buildUserDict is declared NSDictionary*
     // but constructs/returns NSMutableDictionary*. Preserve the warning emitted
     // by the original working build for this exact pinned translation unit.
@@ -67,6 +74,10 @@ internal static class ChatLoomClang {
     // undefined Objective-C class symbol to that separately linked executable.
     private const string Delegate = "[(UNUserNotificationCenter *)[NSClassFromString(@\"UNUserNotificationCenter\") currentNotificationCenter] setDelegate:self];";
     private const string NotificationImport = "#import <UserNotifications/UserNotifications.h>";
+    private const string ShakeMarker = "// ChatLoom: native UIKit shake stream (generated runner inclusion).";
+    private const string ShakeRegistration = "[[ChatLoomShakeBridge shared] registerWithMessenger:engineBridge.applicationRegistrar.messenger];";
+    private const string OriginalWindow = "UIWindow* window = [[UIWindow alloc] initWithWindowScene:windowScene];";
+    private const string ShakeWindow = "UIWindow* window = [[ChatLoomShakeWindow alloc] initWithWindowScene:windowScene];";
     private static string Decode(string value) { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
     private static bool SamePath(string value, string expected) {
         if (String.IsNullOrEmpty(value) || value[0] == '-') return false;
@@ -85,6 +96,7 @@ internal static class ChatLoomClang {
     private static void PrepareRunner() {
         CheckBuildPaths();
         string source = File.ReadAllText(RunnerSource);
+        string original = source;
         if (!source.Contains("@interface AppDelegate : FlutterAppDelegate <FlutterImplicitEngineDelegate>") ||
             !source.Contains("- (void)didInitializeImplicitFlutterEngine:(NSObject<FlutterImplicitEngineBridge>*)engineBridge {"))
             throw new InvalidOperationException("Unsupported xcross runner shape; reassess the notification hook");
@@ -104,16 +116,35 @@ internal static class ChatLoomClang {
                 Regex.Matches(source, Regex.Escape(Delegate)).Count != 1 ||
                 Regex.Matches(source, Regex.Escape(NotificationImport)).Count != 1)
                 throw new InvalidOperationException("Unexpected existing ChatLoom notification hook");
-            return;
+        } else {
+            if (source.Contains(Delegate) || source.Contains(NotificationImport))
+                throw new InvalidOperationException("Unexpected existing notification delegate customization");
+            const string flutterImport = "#import <Flutter/Flutter.h>";
+            if (Regex.Matches(source, Regex.Escape(flutterImport)).Count != 1)
+                throw new InvalidOperationException("Expected one Flutter framework import");
+            source = registration.Replace(source, delegate(Match match) {
+                return match.Value.TrimEnd('\r') + hook + (match.Value.EndsWith("\r") ? "\r" : "");
+            });
+            source = source.Replace(flutterImport, flutterImport + newline + NotificationImport);
         }
-        if (source.Contains(Delegate) || source.Contains(NotificationImport))
-            throw new InvalidOperationException("Unexpected existing notification delegate customization");
-        const string flutterImport = "#import <Flutter/Flutter.h>";
-        if (Regex.Matches(source, Regex.Escape(flutterImport)).Count != 1)
-            throw new InvalidOperationException("Expected one Flutter framework import");
-        source = registration.Replace(source, delegate(Match match) { return match.Value.TrimEnd('\r') + hook; });
-        source = source.Replace(flutterImport, flutterImport + newline + NotificationImport);
-        File.WriteAllText(RunnerSource, source, new UTF8Encoding(false));
+        string shake = ShakeSource.Replace("\r\n", "\n").Replace("\n", newline).TrimEnd('\r', '\n');
+        if (source.Contains(ShakeMarker)) {
+            if (Regex.Matches(source, Regex.Escape(ShakeMarker)).Count != 1 ||
+                !source.Contains(NotificationImport + newline + shake) ||
+                !source.Contains(Delegate + newline + indent + ShakeRegistration) ||
+                Regex.Matches(source, Regex.Escape(ShakeRegistration)).Count != 1 ||
+                Regex.Matches(source, Regex.Escape(ShakeWindow)).Count != 1 ||
+                source.Contains(OriginalWindow))
+                throw new InvalidOperationException("Unexpected existing native shake hook; regenerate the runner");
+        } else {
+            if (source.Contains("ChatLoomShakeBridge") || source.Contains("chatloom/ios_shake") ||
+                Regex.Matches(source, Regex.Escape(OriginalWindow)).Count != 1)
+                throw new InvalidOperationException("Unsupported generated scene window; reassess the native shake hook");
+            source = source.Replace(NotificationImport, NotificationImport + newline + shake);
+            source = source.Replace(Delegate, Delegate + newline + indent + ShakeRegistration);
+            source = source.Replace(OriginalWindow, ShakeWindow);
+        }
+        if (source != original) File.WriteAllText(RunnerSource, source, new UTF8Encoding(false));
     }
     private static bool NeedsPinnedPluginCompatibility(string[] arguments) {
         for (int i = 0; i + 1 < arguments.Length; i++) {
@@ -175,6 +206,7 @@ internal static class ChatLoomClang {
 $source = $source.Replace('__CLANG__', [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($realClang)))
 $source = $source.Replace('__RUNNER__', [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($runnerSource)))
 $source = $source.Replace('__SWIFTPM__', [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Join-Path $env:LOCALAPPDATA 'xcross\swiftpm'))))
+$source = $source.Replace('__SHAKE__', [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($shakeSource)))
 [IO.Directory]::CreateDirectory($helperRoot) | Out-Null
 $sourcePath = Join-Path $helperRoot 'ChatLoomClang.cs'
 foreach ($path in @($sourcePath, $helperPath)) {
@@ -197,4 +229,4 @@ $env:CC = $helperPath
 if ($env:XCROSS_APPLE_TOOL_CLANG -eq $helperPath) {
     $env:XCROSS_APPLE_TOOL_CLANG = $realClang
 }
-Write-Output 'Prepared xcross notification runner hook for this PowerShell session.'
+Write-Output 'Prepared xcross notification and shake runner hooks for this PowerShell session.'

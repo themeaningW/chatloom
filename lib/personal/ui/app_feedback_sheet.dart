@@ -1,23 +1,44 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:chatloom/personal/app_feedback.dart';
+import 'package:chatloom/personal/privacy.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
-Future<void> showAppFeedback(BuildContext context) {
-  final media = MediaQuery.of(context);
-  final environment = AppFeedbackEnvironment.capture(
-    width: media.size.width.round(),
-    height: media.size.height.round(),
-    textScale: media.textScaler.scale(16) / 16,
-    dark: Theme.of(context).brightness == Brightness.dark,
-    reducedMotion: NotionMotion.reduced(context),
-  );
-  return showNotionSheet<void>(
-    context: context,
-    title: 'Report a problem',
-    builder: (_) => AppFeedbackSheet(environment: environment),
-  );
+NavigatorState? _feedbackNavigator;
+Object? _feedbackOwner;
+bool get appFeedbackOpen => _feedbackNavigator?.mounted ?? false;
+
+Future<void> showAppFeedback(BuildContext context) async {
+  if (!context.mounted ||
+      appFeedbackOpen ||
+      !PersonalPrivacy.surfaceUnlocked ||
+      !PersonalPrivacy.surfaceForeground ||
+      WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+    return;
+  }
+  final owner = _feedbackOwner = Object();
+  _feedbackNavigator = Navigator.of(context);
+  try {
+    final media = MediaQuery.of(context);
+    final environment = AppFeedbackEnvironment.capture(
+      width: media.size.width.round(),
+      height: media.size.height.round(),
+      textScale: media.textScaler.scale(16) / 16,
+      dark: Theme.of(context).brightness == Brightness.dark,
+      reducedMotion: NotionMotion.reduced(context),
+    );
+    await showNotionSheet<void>(
+      context: context,
+      title: 'Report a problem',
+      builder: (_) => AppFeedbackSheet(environment: environment),
+    );
+  } finally {
+    if (identical(_feedbackOwner, owner)) {
+      _feedbackOwner = null;
+      _feedbackNavigator = null;
+    }
+  }
 }
 
 class AppFeedbackSheet extends StatefulWidget {
