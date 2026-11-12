@@ -223,6 +223,20 @@ class InboxProjection {
     return group == null ? room.id : 'person:${group.id}';
   }
 
+  /// The draft restored by this entity's editor. Source-room drafts stay
+  /// stored for source views/unmerge; they never replace an empty person draft.
+  ({String? text, bool conflict}) draftFor(Room room) =>
+      _draftForEntity(entityFor(room));
+
+  ({String? text, bool conflict}) _draftForEntity(String entity) {
+    final key = 'draft:$entity';
+    final text = _text(personal.values[key]?['text']);
+    return (
+      text: text?.isNotEmpty == true ? text : null,
+      conflict: personal.conflicts.containsKey(key),
+    );
+  }
+
   String metadataKey(Room room) => 'org:${entityFor(room)}';
 
   /// Private synced key of "Move down" on an unread chat: `{until: ms}`,
@@ -516,6 +530,7 @@ class InboxProjection {
         !latest.redacted &&
         !OwnSenderResolver.of(personal.client).isOwnEvent(latest) &&
         sourceRooms.any((r) => r.canSendDefaultMessages);
+    final draft = _draftForEntity(entity);
     final record = InboxRecord(
       representativeRoomId: representative.id,
       entityId: entity,
@@ -529,15 +544,7 @@ class InboxProjection {
       placement: placementFor(representative),
       unread: sourceRooms.any(personalRoomUnread),
       unreadCount: sourceRooms.fold(0, (n, r) => n + r.notificationCount),
-      hasDraft:
-          (_text(personal.values['draft:$entity']?['text']) ?? '').isNotEmpty ||
-          personal.conflicts.containsKey('draft:$entity') ||
-          sourceRooms.any(
-            (r) =>
-                (_text(personal.values['draft:${r.id}']?['text']) ?? '')
-                    .isNotEmpty ||
-                personal.conflicts.containsKey('draft:${r.id}'),
-          ),
+      hasDraft: draft.text != null || draft.conflict,
       unanswered: unanswered,
       movedDown: movedDown(entity, lastActivity),
       lastActivity: lastActivity,

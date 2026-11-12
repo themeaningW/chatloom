@@ -383,20 +383,9 @@ class _ChatListItemState extends State<ChatListItem> {
       activity,
       sourceLabels: projection.groupFor(room) != null,
     );
-    final draftValues = [
-      personal.values['draft:${projection.entityFor(room)}'],
-      ...sources.map((source) => personal.values['draft:${source.id}']),
-    ];
-    final draft = draftValues
-        .map((value) => value?['text'])
-        .whereType<String>()
-        .where((text) => text.isNotEmpty)
-        .firstOrNull;
-    final conflict =
-        personal.conflicts.containsKey('draft:${projection.entityFor(room)}') ||
-        sources.any(
-          (source) => personal.conflicts.containsKey('draft:${source.id}'),
-        );
+    final draftState = projection.draftFor(room);
+    final draft = draftState.text;
+    final conflict = draftState.conflict;
     final l10n = L10n.of(context);
     final nativeRules = sources.map(accountPushRuleState).toSet();
     final nativeLimited = nativeRules.any(

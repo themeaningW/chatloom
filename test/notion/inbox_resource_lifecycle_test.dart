@@ -14,6 +14,8 @@ import 'package:chatloom/widgets/matrix.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
+import 'package:personal_core/personal_core.dart'
+    show InboxFilter, PersonGroup, SendTarget;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -200,6 +202,114 @@ void main() {
         join: {for (final id in roomIds) id: JoinedRoomUpdate()},
       ),
     ),
+  );
+
+  testWidgets(
+    'merged inbox drafts use only the person editor and preserve source drafts for unmerge',
+    (tester) async {
+      final client = _Client();
+      final first = _Room(client, '!draft-first:example.invalid')
+        ..message(r'$older-source', 'Earlier delivered message', minute: 10);
+      final second = _Room(client, '!draft-second:example.invalid')
+        ..message(r'$latest-source', 'Latest delivered message', minute: 40);
+      final personal = ConversationPersonal(client);
+      PersonalClient.debugUse(client, personal);
+      addTearDown(personal.dispose);
+      final group = PersonGroup(
+        id: 'draft-person',
+        name: 'Fictional merged person',
+        members: [personal.ref(first), personal.ref(second)],
+        defaultRoomId: first.id,
+      );
+      const groupKey = 'person:draft-person';
+      const personDraftKey = 'draft:person:draft-person';
+      final firstDraftKey = 'draft:${first.id}';
+      final secondDraftKey = 'draft:${second.id}';
+      final firstLegacyDraft = {'text': 'Obsolete source draft one'};
+      final secondLegacyDraft = {'text': 'Obsolete source draft two'};
+      personal.values[groupKey] = group.toJson().cast<String, dynamic>();
+      personal.values[firstDraftKey] = firstLegacyDraft;
+      personal.values[secondDraftKey] = secondLegacyDraft;
+      final controller = await mountInbox(tester, client);
+
+      NotionInboxRow mergedRow() =>
+          tester.widget<NotionInboxRow>(find.byType(NotionInboxRow));
+      Future<void> settlePrivateChange() async {
+        personal.notifyListeners();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
+      }
+
+      Future<void> checkDraftsView(int expectedRows) async {
+        controller.setPersonalFilter(InboxFilter.drafts, null);
+        await tester.pumpAndSettle();
+        expect(controller.filterRooms(), hasLength(expectedRows));
+        expect(find.byType(NotionInboxRow), findsNWidgets(expectedRows));
+        controller.setPersonalFilter(InboxFilter.inbox, null);
+        await tester.pumpAndSettle();
+      }
+
+      void expectLatestMessage() {
+        expect(mergedRow().name, 'Fictional merged person');
+        expect(mergedRow().draft, isFalse);
+        expect(mergedRow().preview, contains('Latest delivered message'));
+        expect(mergedRow().preview, isNot(contains('Obsolete source draft')));
+      }
+
+      // A merged composer loads draft:person:<id>, never either source draft.
+      // An absent person record must therefore show its latest message.
+      expect(personal.values, isNot(contains(personDraftKey)));
+      expectLatestMessage();
+      await checkDraftsView(0);
+
+      // An explicit empty persisted draft has exactly the same visible state.
+      personal.values[personDraftKey] = {'text': ''};
+      await settlePrivateChange();
+      expectLatestMessage();
+      await checkDraftsView(0);
+
+      // A current person-editor draft takes precedence and enters Drafts.
+      personal.values[personDraftKey] = {
+        'text': 'Current fictional person draft',
+        'target': SendTarget(conversation: personal.ref(first)).toJson(),
+      };
+      await settlePrivateChange();
+      expect(mergedRow().draft, isTrue);
+      expect(mergedRow().preview, 'Draft: Current fictional person draft');
+      await checkDraftsView(1);
+
+      // Sending/clearing that editor must not resurrect either obsolete draft.
+      personal.values[personDraftKey] = {'text': ''};
+      await settlePrivateChange();
+      expectLatestMessage();
+      await checkDraftsView(0);
+      expect(personal.values[firstDraftKey], firstLegacyDraft);
+      expect(personal.values[secondDraftKey], secondLegacyDraft);
+
+      // Presentation-only suppression preserves both source records. Once the
+      // person is unmerged, each ordinary conversation owns its original draft.
+      personal.values.remove(groupKey);
+      await settlePrivateChange();
+      final ordinaryRows = tester
+          .widgetList<NotionInboxRow>(find.byType(NotionInboxRow))
+          .toList();
+      expect(ordinaryRows, hasLength(2));
+      expect(ordinaryRows.every((row) => row.draft), isTrue);
+      expect(
+        ordinaryRows.map((row) => row.preview),
+        unorderedEquals([
+          'Draft: Obsolete source draft one',
+          'Draft: Obsolete source draft two',
+        ]),
+      );
+      await checkDraftsView(2);
+      expect(personal.values[firstDraftKey], firstLegacyDraft);
+      expect(personal.values[secondDraftKey], secondLegacyDraft);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
   );
 
   testWidgets(

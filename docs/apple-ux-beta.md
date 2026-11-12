@@ -3,6 +3,21 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Merged-draft follow-up (build 3570)
+
+The inbox preview and Drafts filter now read the same draft as the conversation
+editor. A merged person uses its person draft, so clearing it cannot revive an
+old source-room draft or conflict in the list. Source drafts remain stored for
+source views and unmerge. No personal data cleanup or migration is required.
+
+Five focused projection cases reproduce the former mismatch (four failed
+before the fix). A production-row regression covers clearing, filtering and
+unmerge; all 120 selected regression tests pass. Physical-device acceptance
+of this follow-up is still pending installation.
+
+`DESIGN.md` now records the user's priority: fewer visible elements, less text,
+and familiar unambiguous icons with accessible labels and sufficient hit areas.
+
 ## Research and existing-screen audit
 
 The previous production fixtures (`test/notion/goldens/screens/`) showed:

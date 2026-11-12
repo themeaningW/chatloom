@@ -2,6 +2,13 @@
 
 ## Apple-inspired readability pass (2026-11)
 
+The user's priority is less text, familiar unambiguous icons, and fewer visible
+elements. Use icon-only controls for familiar actions, with accessible names,
+tooltips and 48-pixel hit targets. Keep visible text when an icon would be
+ambiguous, destructive consequences need explanation, or status affects the
+next decision. Avoid redundant icon-and-text pairs, ornamental controls and
+dense rows of simultaneous actions; reveal secondary actions when needed.
+
 The user-authorized beta replaces the production floating inbox dock and
 full-width accent unread cards with a solid header, visible search, neutral
 conversation rows and restrained unread indicators. Keep the existing tokens

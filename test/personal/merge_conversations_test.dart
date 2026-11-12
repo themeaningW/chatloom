@@ -877,6 +877,87 @@ void main() {
     return group;
   }
 
+  for (final personText in <Object?>[null, '', 7]) {
+    test('merged inbox draft ignores hidden source drafts ($personText)', () {
+      save('draft-person', [whatsapp, telegram]);
+      final sourceDraft = <String, dynamic>{'text': 'Fictional source draft'};
+      personal.values['draft:${whatsapp.id}'] = sourceDraft;
+      personal.conflicts['draft:${telegram.id}'] = {'fixture': true};
+      if (personText != null) {
+        personal.values['draft:person:draft-person'] = {'text': personText};
+      }
+
+      final projection = InboxProjection.snapshot(personal);
+      final index = projection.buildIndex(client.rooms);
+      expect(
+        index.records
+            .singleWhere((r) => r.entityId == 'person:draft-person')
+            .hasDraft,
+        isFalse,
+      );
+      expect(projection.select(index, filter: InboxFilter.drafts), isEmpty);
+      expect(personal.values['draft:${whatsapp.id}'], same(sourceDraft));
+      expect(personal.conflicts, contains('draft:${telegram.id}'));
+    });
+  }
+
+  test('merged inbox draft clears without resurrecting a source draft', () {
+    save('draft-person', [whatsapp, telegram]);
+    personal.values['draft:${whatsapp.id}'] = {
+      'text': 'Fictional source draft',
+    };
+    personal.values['draft:person:draft-person'] = {
+      'text': 'Fictional current person draft',
+      // A removed/outside source must not hide genuine text needing rerouting.
+      'target': SendTarget(conversation: personal.ref(signal)).toJson(),
+    };
+    var projection = InboxProjection.snapshot(personal);
+    expect(
+      projection.select(
+        projection.buildIndex(client.rooms),
+        filter: InboxFilter.drafts,
+      ),
+      [whatsapp],
+    );
+
+    personal.values['draft:person:draft-person'] = {'text': ''};
+    projection = InboxProjection.snapshot(personal);
+    expect(
+      projection.select(
+        projection.buildIndex(client.rooms),
+        filter: InboxFilter.drafts,
+      ),
+      isEmpty,
+    );
+
+    personal.values.remove('person:draft-person');
+    projection = InboxProjection.snapshot(personal);
+    expect(
+      projection.select(
+        projection.buildIndex(client.rooms),
+        filter: InboxFilter.drafts,
+      ),
+      [whatsapp],
+    );
+    expect(
+      personal.values['draft:${whatsapp.id}']?['text'],
+      'Fictional source draft',
+    );
+  });
+
+  test('merged inbox draft keeps a conflict owned by the person', () {
+    save('draft-person', [whatsapp, telegram]);
+    personal.conflicts['draft:person:draft-person'] = {'fixture': true};
+    final projection = InboxProjection.snapshot(personal);
+    expect(
+      projection.select(
+        projection.buildIndex(client.rooms),
+        filter: InboxFilter.drafts,
+      ),
+      [whatsapp],
+    );
+  });
+
   test('a left or deleted source keeps the person merged (FT-01)', () {
     final person = save('p', [whatsapp, telegram, signal]);
     client.rooms.remove(telegram); // left: the SDK drops the room
