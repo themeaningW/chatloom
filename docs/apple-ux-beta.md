@@ -31,6 +31,13 @@ clean and the strict design-token check passes. The separate presentation
 harness cannot start without its external source-snapshot prerequisite;
 production widget fixtures supplied the captures instead.
 
+The Windows xcross release of `635caab` completed as **2.10.0 (3579)**.
+Bundle metadata and GIF-search code were verified in AOT, together with the
+retained bridge endpoint, notification/shake hooks and report screenshots.
+This artifact has not been installed on the physical iPhone. Swift/Xcode
+compilation remains unverified here; the known dSYM and CocoaPods-only Share
+plugin limitations remain.
+
 ## Pull-down search and compact filters (3578)
 
 Search starts hidden above the inbox content. Pull the list down from its top
