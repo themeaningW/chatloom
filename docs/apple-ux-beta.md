@@ -17,8 +17,16 @@ iOS policy. Both Xcode and Windows xcross source paths include it; the generated
 notification delegate hook is preserved. See [implementation and acceptance](ios-shake-to-report.md).
 
 36 selected Flutter regressions and the scoped PowerShell runner-shim tests pass.
-Physical iPhone shake/startup/keyboard acceptance remains pending installation;
-the Windows build does not compile the Swift Xcode runner.
+App analysis has zero errors/warnings and 70 existing informational findings;
+the strict design-token no-growth check passes.
+
+The Windows xcross release of `7d85369` completed as **2.10.0 (3575)**.
+Bundle metadata, the preference and reporting code in AOT, both native shake
+channels, the custom window and subscription nonce protocol were verified.
+The private bridge configuration and notification delegate hook remain included.
+This artifact has not been installed on the iPhone: physical shake/startup/keyboard
+acceptance remains pending, and the Windows build does not compile the Swift
+Xcode runner. The known dSYM and Share extension limitations remain.
 
 ## iPhone interaction and feedback (3574)
 
