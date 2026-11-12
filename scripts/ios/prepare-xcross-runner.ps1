@@ -49,12 +49,18 @@ $source = @'
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
 internal static class ChatLoomClang {
     private static readonly string RealClang = Decode("__CLANG__");
     private static readonly string RunnerSource = Decode("__RUNNER__");
+    private static readonly string SwiftPmCache = Decode("__SWIFTPM__");
+    // flutter_local_notifications 22.3.1: buildUserDict is declared NSDictionary*
+    // but constructs/returns NSMutableDictionary*. Preserve the warning emitted
+    // by the original working build for this exact pinned translation unit.
+    private const string LocalNotificationsSha256 = "42D8A987645116E599BF887B0211851636033418D63A45A414FF162ACB5B7BD7";
     private const string Marker = "// ChatLoom: restore Flutter notification delegate after plugin registration.";
     // xcross links Runner using ld64.lld directly and omits UserNotifications.
     // Resolve its already loaded class through Foundation instead of adding an
@@ -109,6 +115,27 @@ internal static class ChatLoomClang {
         source = source.Replace(flutterImport, flutterImport + newline + NotificationImport);
         File.WriteAllText(RunnerSource, source, new UTF8Encoding(false));
     }
+    private static bool NeedsPinnedPluginCompatibility(string[] arguments) {
+        for (int i = 0; i + 1 < arguments.Length; i++) {
+            if (arguments[i] != "-c") continue;
+            string sourcePath = Path.GetFullPath(arguments[i + 1]);
+            string suffix = @"\plugins\Packages\flutter_local_notifications\ios\flutter_local_notifications\Sources\flutter_local_notifications\FlutterLocalNotificationsPlugin.m";
+            if (!sourcePath.StartsWith(SwiftPmCache + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                !sourcePath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
+            string cacheKey = sourcePath.Substring(SwiftPmCache.Length + 1,
+                sourcePath.Length - SwiftPmCache.Length - 1 - suffix.Length);
+            if (!Regex.IsMatch(cacheKey, "^[a-fA-F0-9]{16}$")) continue;
+            string hash;
+            using (SHA256 sha = SHA256.Create())
+            using (FileStream input = File.OpenRead(sourcePath)) {
+                hash = BitConverter.ToString(sha.ComputeHash(input)).Replace("-", "");
+            }
+            if (hash != LocalNotificationsSha256)
+                throw new InvalidOperationException("The notification plugin source changed; reassess its compiler compatibility flag");
+            return true;
+        }
+        return false;
+    }
     // Quote every argument according to the Windows CRT argv rules. In
     // particular, trailing backslashes and backslashes before quotes double.
     private static string Quote(string argument) {
@@ -134,6 +161,7 @@ internal static class ChatLoomClang {
             if (compilesRunner) PrepareRunner();
             StringBuilder forwarded = new StringBuilder();
             foreach (string argument in arguments) forwarded.Append(Quote(argument)).Append(' ');
+            if (NeedsPinnedPluginCompatibility(arguments)) forwarded.Append("-Wno-error=incompatible-pointer-types");
             ProcessStartInfo start = new ProcessStartInfo(RealClang, forwarded.ToString());
             start.UseShellExecute = false;
             using (Process child = Process.Start(start)) { child.WaitForExit(); return child.ExitCode; }
@@ -146,6 +174,7 @@ internal static class ChatLoomClang {
 '@
 $source = $source.Replace('__CLANG__', [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($realClang)))
 $source = $source.Replace('__RUNNER__', [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($runnerSource)))
+$source = $source.Replace('__SWIFTPM__', [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Join-Path $env:LOCALAPPDATA 'xcross\swiftpm'))))
 [IO.Directory]::CreateDirectory($helperRoot) | Out-Null
 $sourcePath = Join-Path $helperRoot 'ChatLoomClang.cs'
 foreach ($path in @($sourcePath, $helperPath)) {

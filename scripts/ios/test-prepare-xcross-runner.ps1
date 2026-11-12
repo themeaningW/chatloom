@@ -94,6 +94,23 @@ try {
     $otherLink = @((Join-Path $runnerRoot 'Runner.o'), '-o', (Join-Path $otherRoot 'Runner'))
     & $shim @otherLink
     Assert-Arguments $otherLink
+    # The compatibility case reads a pinned cached plugin source but invokes
+    # only FakeClang. It never compiles or modifies the real package/cache.
+    $cacheRoot = Join-Path $env:LOCALAPPDATA 'xcross\swiftpm'
+    $pluginSuffix = 'plugins\Packages\flutter_local_notifications\ios\flutter_local_notifications\Sources\flutter_local_notifications\FlutterLocalNotificationsPlugin.m'
+    $pinnedPlugin = @(Get-ChildItem -LiteralPath $cacheRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^[a-fA-F0-9]{16}$' } | ForEach-Object {
+        $candidate = Join-Path $_.FullName $pluginSuffix
+        if ((Test-Path -LiteralPath $candidate -PathType Leaf) -and
+            (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash -eq '42D8A987645116E599BF887B0211851636033418D63A45A414FF162ACB5B7BD7') { $candidate }
+    }) | Select-Object -First 1
+    if ($pinnedPlugin) {
+        $pluginArguments = @('-c', $pinnedPlugin, '-o', (Join-Path $fixtureRoot 'plugin.o'))
+        & $shim @pluginArguments
+        if ($LASTEXITCODE -ne 0) { throw 'Pinned plugin compatibility transport failed' }
+        Assert-Arguments ($pluginArguments + @('-Wno-error=incompatible-pointer-types'))
+    } else {
+        Write-Output 'SKIP: pinned cached plugin source is absent; no positive compatibility fixture available.'
+    }
     $env:CHATLOOM_TEST_CLANG_EXIT = '23'
     & $shim --version
     if ($LASTEXITCODE -ne 23) { throw 'Compiler exit code was not forwarded' }

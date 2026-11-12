@@ -59,7 +59,7 @@ The helper builds a small managed compiler shim under `build/` and sets the
 process-local `CC` override used by xcross's Darwin runner compiler selector.
 (`XCROSS_APPLE_TOOL_CLANG` affects other build paths and does not select the
 runner compiler in xcross 2.0.9.) It forwards compiler arguments and exit status
-unchanged and prepares only this checkout's generated
+and prepares only this checkout's generated
 `build/xcross-flutter-runner-bin/Runner.m` immediately before compilation. The
 Objective-C hook resolves the notification-center class through Foundation;
 this avoids a new framework link dependency in xcross's separately linked
@@ -68,6 +68,14 @@ repeatable even when xcross regenerates the source. An unexpected runner
 template fails before compilation. It changes no xcross binary, package source,
 entitlement or credential. Run the preparation again in each new PowerShell
 session; a standalone patch to generated Runner.m would be overwritten.
+
+The same CC selector is used by Windows SwiftPM. For the pinned
+flutter_local_notifications 22.3.1 source only, the shim keeps its existing
+NSDictionary/NSMutableDictionary mismatch at warning severity using
+`-Wno-error=incompatible-pointer-types`. That exception requires the exact
+source SHA-256 and expected xcross cache layout. A changed source fails for
+review; package files remain untouched. Every other compiler invocation and
+all linker arguments are forwarded unchanged.
 
 `scripts/ios/test-prepare-xcross-runner.ps1` checks the shim against a synthetic
 compiler, including argument quoting, regeneration, idempotence, path scope,
