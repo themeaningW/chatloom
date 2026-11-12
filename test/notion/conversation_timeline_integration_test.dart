@@ -1,6 +1,7 @@
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/l10n/l10n.dart';
 import 'package:chatloom/pages/chat/chat.dart';
+import 'package:chatloom/pages/chat/chat_event_list.dart';
 import 'package:chatloom/pages/chat/chat_input_row.dart';
 import 'package:chatloom/pages/chat/compact_composer.dart';
 import 'package:chatloom/pages/chat/conversation_bubble.dart';
@@ -29,8 +30,9 @@ import 'conversation_test_support.dart';
 Future<ConversationMatrix> mountConversation(
   WidgetTester tester,
   Widget child,
-  ConversationClient client,
-) async {
+  ConversationClient client, {
+  TargetPlatform? platform,
+}) async {
   final state = ConversationMatrix(
     client,
     await SharedPreferences.getInstance(),
@@ -39,6 +41,9 @@ Future<ConversationMatrix> mountConversation(
     Provider<MatrixState>.value(
       value: state,
       child: MaterialApp(
+        theme: platform == null
+            ? null
+            : NotionTheme.build(Brightness.dark).copyWith(platform: platform),
         localizationsDelegates: L10n.localizationsDelegates,
         supportedLocales: L10n.supportedLocales,
         home: child,
@@ -98,6 +103,41 @@ void main() {
     await AppSettings.doubleTapToReact.setItem(true);
     await AppSettings.swipeRightToLeftToReply.setItem(false);
   });
+  testWidgets(
+    'scrolling the production iOS timeline dismisses the keyboard and keeps the unsent draft',
+    (tester) async {
+      final client = ConversationClient();
+      final a = ConversationRoom(client, '!ios-one:example.invalid');
+      final b = ConversationRoom(client, '!ios-two:example.invalid');
+      for (var i = 0; i < 40; i++) {
+        a.message('fictional-$i', 'Fictional message $i', minute: i);
+      }
+      final personal = ConversationPersonal(client);
+      addTearDown(personal.dispose);
+      await mountConversation(
+        tester,
+        MergedChatPage(personal: personal, group: group(personal, a, b)),
+        client,
+        platform: TargetPlatform.iOS,
+      );
+      await tester.showKeyboard(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'Keep my unsent draft');
+      await tester.pumpAndSettle();
+      final editor = tester.widget<EditableText>(find.byType(EditableText));
+      expect(editor.focusNode.hasFocus, isTrue);
+      final timeline = find
+          .descendant(
+            of: find.byType(ChatEventList),
+            matching: find.byType(ListView),
+          )
+          .first;
+      await tester.drag(timeline, const Offset(0, 180));
+      await tester.pumpAndSettle();
+      expect(editor.focusNode.hasFocus, isFalse);
+      expect(editor.controller.text, 'Keep my unsent draft');
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'ordinary production presenter moves whole bubble and invokes real reply callback once',
     (tester) async {
@@ -342,12 +382,13 @@ void main() {
       expect(find.text('Send later'), findsNothing);
       final l10n = L10n.of(tester.element(find.byType(ChatInputRow)));
       final file = l10n.sendFile;
-      // Library media (photo and video together), then structured content.
+      // Library media then files. This WhatsApp fixture has no outgoing-poll
+      // contract; received read-only polls must not enable creation.
       final order = [
         'Photo or video',
         file,
-        l10n.startPoll,
       ].map((label) => tester.getCenter(find.text(label)).dy).toList();
+      expect(find.text(l10n.startPoll), findsNothing);
       for (var i = 1; i < order.length; i++) {
         expect(order[i], greaterThan(order[i - 1]));
       }
@@ -417,9 +458,7 @@ void main() {
       expect(tester.getRect(sheet), open);
       expect(find.text('Photo or video'), findsOneWidget);
       expect(
-        find.text(
-          L10n.of(tester.element(find.byType(ChatInputRow))).sendFile,
-        ),
+        find.text(L10n.of(tester.element(find.byType(ChatInputRow))).sendFile),
         findsOneWidget,
       );
       await tester.tap(find.text('Photo or video'));

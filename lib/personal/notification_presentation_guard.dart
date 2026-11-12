@@ -3,6 +3,22 @@ import 'package:chatloom/personal/deleted_messages.dart';
 import 'package:chatloom/personal/hidden_messages.dart';
 import 'package:matrix/matrix.dart';
 
+/// A merged conversation shows every source, while an explicitly opened source
+/// only shows that room. Read loaded route/identity data; never mark anything read.
+bool notificationConversationVisible({
+  required Uri location,
+  required bool sameAccount,
+  required String roomId,
+  String? groupId,
+}) {
+  if (!sameAccount) return false;
+  final parts = location.pathSegments;
+  if (parts.length < 2 || parts.first != 'rooms') return false;
+  if (parts[1] != 'person') return parts[1] == roomId;
+  if (parts.length < 3 || groupId == null || parts[2] != groupId) return false;
+  return parts.length == 3 || parts[3] == roomId;
+}
+
 /// An in-flight alert belongs to exactly the session that produced it. Stream
 /// cancellation on logout does not cancel asynchronous work already in flight.
 /// Check this after asynchronous reads and immediately before OS presentation.

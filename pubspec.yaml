@@ -7,7 +7,7 @@ name: chatloom
 description: Chat with your friends.
 publish_to: none
 # On version bump please also increase the build number.
-version: 2.10.0+3573
+version: 2.10.0+3574
 
 environment:
   sdk: ">=3.11.1 <4.0.0"

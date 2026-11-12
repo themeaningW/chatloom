@@ -11,6 +11,13 @@ message-preview and app-lock policies. Taps use the existing account-aware
 notification router. Cold and warm delivery of the same response is deduplicated.
 No account, chat or message data is added to diagnostic logs.
 
+Settings also offers **Message alerts** and **Play sound** controls for incoming
+local message alerts. A merged person shares one notification ID and iOS thread
+across its source chats. Alerts are serialized, duplicate events are suppressed,
+and older backfill cannot replace the newest displayed alert. Session/privacy
+changes while presentation is pending cancel that request. These checks establish
+requests to the OS, not evidence that iOS displayed an alert.
+
 ## What this does not implement
 
 There is no APNs registration, device-token upload, APNs-enabled provisioning,

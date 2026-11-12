@@ -5,6 +5,7 @@ import 'package:chatloom/pages/settings/settings.dart';
 import 'package:chatloom/personal/encryption/recovery_settings.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/personal/sync_changes.dart';
+import 'package:chatloom/personal/ui/app_feedback_sheet.dart';
 import 'package:chatloom/personal/ui/developer_settings_page.dart';
 import 'package:chatloom/personal/ui/notion_settings_body.dart';
 import 'package:chatloom/personal/ui/notion_settings_load.dart';
@@ -126,6 +127,11 @@ class _NotionSettingsAdapterState extends State<NotionSettingsAdapter> {
               title: 'About ChatLoom',
               subtitle: 'Version, licences and source code',
               onTap: () => PlatformInfos.showDialog(context),
+            ),
+            NotionListRow(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: 'Report a problem',
+              onTap: () => showAppFeedback(context),
             ),
             const DeveloperOptionsSection(),
           ],

@@ -21,6 +21,8 @@ void main() {
   var failInitialization = false;
   Map<String, Object?>? launch;
   Completer<bool>? permissionRequest;
+  Completer<bool>? initialization;
+  var failShow = false;
 
   setUp(() {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
@@ -30,12 +32,15 @@ void main() {
     failInitialization = false;
     launch = null;
     permissionRequest = null;
+    initialization = null;
+    failShow = false;
     notifications = IosLocalNotifications();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           calls.add(call);
           switch (call.method) {
             case 'initialize':
+              if (initialization != null) return initialization!.future;
               if (failInitialization) {
                 throw PlatformException(code: 'fixture-unavailable');
               }
@@ -50,6 +55,9 @@ void main() {
             case 'openAppNotificationSettings':
               return true;
             case 'show':
+              if (failShow) {
+                throw PlatformException(code: 'fixture-show-failed');
+              }
               return null;
             default:
               throw StateError(
@@ -187,6 +195,71 @@ void main() {
     expect(await notifications.permission(), IosNotificationPermission.allowed);
     expect(await notifications.openSettings(), isTrue);
     expect(calls.last.method, 'openAppNotificationSettings');
+  });
+
+  Future<bool> message({
+    String event = 'fictional-event',
+    int time = 10,
+    bool sound = true,
+    bool Function()? current,
+  }) => notifications.showMessage(
+    id: 77,
+    threadIdentifier: 'fictional-client_person:fictional-person',
+    eventIdentity: event,
+    timestamp: DateTime.fromMillisecondsSinceEpoch(time),
+    title: 'ChatLoom',
+    body: 'New message',
+    payload: 'fictional-payload:$event',
+    playSound: sound,
+    canPresent: current ?? () => true,
+  );
+
+  test(
+    'concurrent duplicate alerts show once and do not request permission',
+    () async {
+      final results = await Future.wait([message(), message()]);
+      expect(results.where((r) => r), hasLength(1));
+      expect(calls.where((c) => c.method == 'show'), hasLength(1));
+      expect(calls.where((c) => c.method == 'requestPermissions'), isEmpty);
+    },
+  );
+  test(
+    'backfill cannot replace the newest conversation alert; sound is optional',
+    () async {
+      await message();
+      expect(await message(event: 'older', time: 9), isFalse);
+      expect(await message(event: 'newer', time: 11, sound: false), isTrue);
+      final shown = calls.where((c) => c.method == 'show').toList();
+      expect(shown, hasLength(2));
+      final args = shown.last.arguments as Map;
+      expect(args['payload'], 'fictional-payload:newer');
+      final details = args['platformSpecifics'] as Map;
+      expect(
+        details['threadIdentifier'],
+        'fictional-client_person:fictional-person',
+      );
+      expect(details['presentSound'], isFalse);
+      expect(details['presentBanner'], isTrue);
+    },
+  );
+  test(
+    'an account or privacy change during initialization prevents presentation',
+    () async {
+      initialization = Completer<bool>();
+      var current = true;
+      final requested = message(current: () => current);
+      await Future<void>.delayed(Duration.zero);
+      current = false;
+      initialization!.complete(true);
+      expect(await requested, isFalse);
+      expect(calls.where((c) => c.method == 'show'), isEmpty);
+    },
+  );
+  test('a failed local presentation can be retried', () async {
+    failShow = true;
+    await expectLater(message(), throwsA(isA<PlatformException>()));
+    failShow = false;
+    expect(await message(), isTrue);
   });
 
   testWidgets(

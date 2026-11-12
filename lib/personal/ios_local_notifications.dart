@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'package:chatloom/personal/notification_threads.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -18,6 +19,8 @@ class IosLocalNotifications {
   void Function(NotificationResponse)? _onResponse;
   final _pendingResponses = <NotificationResponse>[];
   final _handled = <String>{};
+  final _shown = <String>{};
+  final _newest = <int, DateTime>{};
 
   /// Repeated account setup shares initialization and uses the latest owner.
   /// Launch inspection is separate from permissions, so denied permission does
@@ -109,6 +112,50 @@ class IosLocalNotifications {
           >()
           ?.openAppNotificationSettings() ??
       false;
+
+  /// Requests local OS presentation; no APNs registration or delivery claim.
+  /// One conversation is serialized, duplicate events and older backfill do
+  /// not replace its newest alert. The caller owns eligibility and previews.
+  Future<bool> showMessage({
+    required int id,
+    required String threadIdentifier,
+    required String eventIdentity,
+    required DateTime timestamp,
+    required String title,
+    required String body,
+    required String payload,
+    required bool Function() canPresent,
+    bool playSound = true,
+  }) async {
+    if (!canPresent()) return false;
+    await initialize();
+    var requested = false;
+    await NotificationThreads.serialize(id, () async {
+      if (!canPresent() || _shown.contains(eventIdentity)) return;
+      if (_newest[id]?.isAfter(timestamp) == true) return;
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        payload: payload,
+        notificationDetails: NotificationDetails(
+          iOS: DarwinNotificationDetails(
+            threadIdentifier: threadIdentifier,
+            presentAlert: true,
+            presentBanner: true,
+            presentList: true,
+            presentSound: playSound,
+          ),
+        ),
+      );
+      requested = true;
+      _shown.add(eventIdentity);
+      _newest[id] = timestamp;
+      if (_shown.length > 128) _shown.remove(_shown.first);
+      if (_newest.length > 128) _newest.remove(_newest.keys.first);
+    });
+    return requested;
+  }
 
   /// Contains no account, chat, sender or message data. Never sends a message.
   Future<bool> showTest() async {

@@ -22,7 +22,7 @@ import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/utils/account_config.dart';
 import 'package:chatloom/utils/matrix_sdk_extensions/filtered_timeline_extension.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show TargetPlatform, ValueListenable;
 import 'package:flutter/rendering.dart' show ScrollCacheExtent, ScrollDirection;
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
@@ -466,7 +466,10 @@ class _ChatEventListState extends State<ChatEventList>
               ? const ScrollCacheExtent.viewport(1.0)
               : const ScrollCacheExtent.pixels(250),
           controller: controller.scrollController,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+          keyboardDismissBehavior:
+              Theme.of(context).platform == TargetPlatform.iOS
+              ? ScrollViewKeyboardDismissBehavior.onDrag
+              : ScrollViewKeyboardDismissBehavior.manual,
           childrenDelegate: SliverChildBuilderDelegate(
             (BuildContext context, int i) {
               // Footer to display typing indicator and read receipts:

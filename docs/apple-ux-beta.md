@@ -3,6 +3,34 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## iPhone interaction and feedback (3574)
+
+iOS keeps native Cupertino page navigation, including edge-back progress and
+cancellation. Its shared transition adapter also removes translations under
+Reduce Motion on imperative routes without remounting the editor. Scrolling
+the conversation dismisses the iOS keyboard and retains the unsent draft.
+Existing swipe reply, reactions, previews, sheet/media dismissal and zoom
+remain in their existing shared components.
+
+Local incoming-message alerts now offer **Message alerts** and **Play sound**
+controls. A merged person uses one notification thread, duplicate events are
+suppressed and old backfill cannot replace its newer alert. Open-person versus
+open-source routing is account-scoped, and pending local presentation is
+cancelled when the session/privacy guard changes. **APNs delivery while the app
+is suspended or closed is still not connected**; local permission and these
+changes cannot supply that capability.
+
+**Settings → Advanced → Report a problem** copies a user-written report with
+version/build and allowlisted display/OS context. It collects no chats/logs and
+submits nothing automatically. See [the development loop](ios-development-loop.md)
+and the [production-sheet fixture capture](ux/apple/feedback-sheet-dark.png).
+
+137 focused regressions pass, covering interactive navigation completion and
+cancellation, PopScope veto, Reduce Motion, real production timeline keyboard
+dismissal, notification privacy/grouping and label regressions. Native iPhone
+presentation, gestures, actual frame timing and remote push require separate
+device acceptance.
+
 ## Custom labels (3573)
 
 The existing private label model is now available from the inbox's label icon

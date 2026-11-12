@@ -1,0 +1,22 @@
+name: iPhone beta issue
+description: Report a bug or a UI/UX problem noticed on an iPhone.
+title: "[iOS] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        In ChatLoom, open Settings → Advanced → Report a problem and copy the report.
+        Add a screenshot or short recording if useful. Check attachments for private chat content.
+  - type: textarea
+    id: report
+    attributes:
+      label: Report
+      description: Paste the copied report, including the app build number.
+      placeholder: Steps, expected result, actual result and app version.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshot or recording
+      description: For gestures and animation problems, a recording is especially helpful.

@@ -26,6 +26,30 @@ class _Client extends Client {
 }
 
 void main() {
+  test(
+    'active conversation suppression understands merged and source routes, scoped to the account',
+    () {
+      bool visible(
+        String path, {
+        bool sameAccount = true,
+        String? group = 'p',
+      }) => notificationConversationVisible(
+        location: Uri.parse(path),
+        sameAccount: sameAccount,
+        roomId: '!one:example.invalid',
+        groupId: group,
+      );
+      expect(visible('/rooms/!one:example.invalid'), isTrue);
+      expect(visible('/rooms/!one:example.invalid/details'), isTrue);
+      expect(visible('/rooms/person/p'), isTrue);
+      expect(visible('/rooms/person/p/!one:example.invalid'), isTrue);
+      expect(visible('/rooms/person/p/!other:example.invalid'), isFalse);
+      expect(visible('/rooms/person/another'), isFalse);
+      expect(visible('/rooms/person/p', sameAccount: false), isFalse);
+      expect(visible('/rooms/person/p', group: null), isFalse);
+      expect(visible('/rooms/settings'), isFalse);
+    },
+  );
   late _Client client;
   late Event event;
   var owned = true;

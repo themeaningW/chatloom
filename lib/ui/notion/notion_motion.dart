@@ -2,6 +2,8 @@
 
 import 'dart:async';
 
+import 'package:cupertino_ui/cupertino_ui.dart'
+    show CupertinoPageTransitionsBuilder;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -538,6 +540,44 @@ class _AfterRouteTransitionState extends State<AfterRouteTransition>
     final fade = _fadeCurve;
     if (fade == null) return widget.child;
     return FadeTransition(opacity: fade, child: widget.child);
+  }
+}
+
+/// Native iOS navigation, with the same hierarchy, edge gesture and parallax
+/// as Cupertino. Keep a stable tree when Reduce Motion changes: its native
+/// translations rest, with only a short fade on imperative routes.
+class NotionIosPageTransitionsBuilder extends PageTransitionsBuilder {
+  const NotionIosPageTransitionsBuilder();
+  static const _native = CupertinoPageTransitionsBuilder();
+  @override
+  Duration get transitionDuration => _native.transitionDuration;
+  @override
+  Duration get reverseTransitionDuration => _native.reverseTransitionDuration;
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final still =
+        route.transitionDuration == Duration.zero ||
+        NotionMotion.reduced(context);
+    return FadeTransition(
+      opacity: still && route.transitionDuration != Duration.zero
+          ? animation.drive(
+              CurveTween(curve: const Interval(0, .4, curve: Curves.easeOut)),
+            )
+          : kAlwaysCompleteAnimation,
+      child: _native.buildTransitions(
+        route,
+        context,
+        still ? kAlwaysCompleteAnimation : animation,
+        still ? kAlwaysDismissedAnimation : secondaryAnimation,
+        child,
+      ),
+    );
   }
 }
 

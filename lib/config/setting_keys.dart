@@ -136,6 +136,11 @@ enum AppSettings<T> {
     'pl.personal.notifications.previews',
     true,
   ),
+  personalIosMessageAlerts<bool>('pl.personal.ios.message_alerts', true),
+  personalIosNotificationSound<bool>(
+    'pl.personal.ios.notification_sound',
+    true,
+  ),
 
   /// Inbox encryption notice dismissed until its issues change: an account
   /// hash and issue signatures (see `E2eeNoticeDismissal`), no ids.

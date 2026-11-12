@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import 'package:cupertino_ui/cupertino_ui.dart'
-    show CupertinoPageTransitionsBuilder;
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -26,7 +24,7 @@ abstract final class NotionTheme {
       TargetPlatform.linux: NotionPageTransitionsBuilder(),
       TargetPlatform.macOS: NotionPageTransitionsBuilder(),
       TargetPlatform.windows: NotionPageTransitionsBuilder(),
-      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.iOS: NotionIosPageTransitionsBuilder(),
     },
   );
 

@@ -84,6 +84,15 @@ class _IosNotificationsPageState extends State<IosNotificationsPage>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const NotionSectionHeader(title: 'On this iPhone'),
+        SettingsSwitchListTile.adaptive(
+          title: 'Message alerts',
+          subtitle: 'While ChatLoom is running and syncing',
+          setting: AppSettings.personalIosMessageAlerts,
+        ),
+        SettingsSwitchListTile.adaptive(
+          title: 'Play sound',
+          setting: AppSettings.personalIosNotificationSound,
+        ),
         NotionListRow(
           leading: const Icon(Icons.notifications_outlined),
           title: 'Notification permission',
@@ -98,7 +107,7 @@ class _IosNotificationsPageState extends State<IosNotificationsPage>
         NotionButton.ghost(
           label: 'Enable notifications',
           busy: _busy,
-          onPressed: _busy
+          onPressed: _busy || _permission == IosNotificationPermission.allowed
               ? null
               : () => _run(IosLocalNotifications.instance.requestPermission),
         ),

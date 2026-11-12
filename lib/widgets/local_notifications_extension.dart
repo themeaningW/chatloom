@@ -11,6 +11,7 @@ import 'package:chatloom/personal/message_notification.dart';
 import 'package:chatloom/personal/message_preview.dart';
 import 'package:chatloom/personal/notification_eligibility.dart';
 import 'package:chatloom/personal/notification_presentation_guard.dart';
+import 'package:chatloom/personal/notification_threads.dart';
 import 'package:chatloom/personal/own_sender.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/personal/privacy.dart';
@@ -19,6 +20,7 @@ import 'package:chatloom/personal/round_video/telegram_media_protocol.dart';
 import 'package:chatloom/utils/notification_client_routing.dart';
 import 'package:chatloom/utils/platform_infos.dart';
 import 'package:chatloom/utils/push_helper.dart';
+import 'package:chatloom/widgets/chatloom_app.dart';
 import 'package:chatloom/widgets/matrix.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -40,6 +42,7 @@ extension LocalNotificationsExtension on MatrixState {
     );
     if (!guard.current) return;
     if (PlatformInfos.isIOS) {
+      if (!AppSettings.personalIosMessageAlerts.value) return;
       await IosLocalNotifications.instance.initialize();
       if (!guard.current) return;
     }
@@ -82,7 +85,12 @@ extension LocalNotificationsExtension on MatrixState {
 
     if (!guard.current) return;
     final roomId = event.room.id;
-    if (activeRoomId == roomId) {
+    if (notificationConversationVisible(
+      location: ChatLoomApp.router.routeInformationProvider.value.uri,
+      sameAccount: identical(this.client, client),
+      roomId: roomId,
+      groupId: projection.groupFor(event.room)?.id,
+    )) {
       if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         return;
       }
@@ -111,7 +119,35 @@ extension LocalNotificationsExtension on MatrixState {
       return;
     }
 
-    FlutterLocalNotificationsPlugin().show(
+    if (PlatformInfos.isIOS) {
+      final surface = PersonalPrivacy.surfaceGeneration;
+      final thread = notificationThreadOf(
+        client.clientName,
+        event.room,
+        projection,
+      );
+      await IosLocalNotifications.instance.showMessage(
+        id: thread.id,
+        threadIdentifier: thread.threadIdentifier,
+        eventIdentity: '${client.clientName}/$roomId/${event.eventId}',
+        timestamp: event.originServerTs,
+        title: title,
+        body: body,
+        payload: ChatLoomPushPayload(
+          client.clientName,
+          roomId,
+          event.eventId,
+        ).toString(),
+        canPresent: () =>
+            guard.current &&
+            surface == PersonalPrivacy.surfaceGeneration &&
+            AppSettings.personalIosMessageAlerts.value,
+        playSound: AppSettings.personalIosNotificationSound.value,
+      );
+      return;
+    }
+
+    await FlutterLocalNotificationsPlugin().show(
       id: messageNotificationId(client.clientName, event.room.id),
       title: title,
       body: body,
