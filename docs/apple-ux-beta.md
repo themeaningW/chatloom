@@ -94,7 +94,7 @@ visual fixture captures and actual device acceptance must be reported separately
 
 ## Verification on Windows
 
-- 286 focused regression tests passed: clipboard/menu/keyboard insertion,
+- The initial Apple UX pass ran 286 focused regression tests: clipboard/menu/keyboard insertion,
   selection and grapheme limits, previews/reels, sorting and pins, large-text
   layout, notification privacy/routing and inbox resource lifecycle.
 - Application analysis (`lib`) has zero errors and zero warnings, with 70
@@ -112,11 +112,12 @@ analysis above. No worker/server changes were made by this beta.
 
 ## Native release artifact
 
-The Windows xcross release build succeeded from source commit
-`d918722ac8582d2bd9f4d24b491902579f232d4d`:
+The Windows xcross release build, including the merged-draft fix, succeeded
+from source commit `4c52f89e6dd7c900052f0d84cc64d3beb17389c1`:
 
 - Bundle: `build/xcross-ios/chatloom.app`, release/AOT.
-- Bundle metadata verified as **2.10.0 (3569)**.
+- Bundle metadata verified as **2.10.0 (3570)**. The 120 selected follow-up
+  regression tests passed; no physical-device acceptance is claimed.
 - The generated Runner sets Flutter's notification delegate after plugin
   registration. The class lookup is present in the executable, and the bundled
   plugin library links UserNotifications. This verifies inclusion, not delivery
