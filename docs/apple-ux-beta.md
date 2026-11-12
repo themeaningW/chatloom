@@ -3,6 +3,38 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Automatic report screenshots (3577)
+
+Both shake and manual **Report a problem** capture the visible Flutter app
+surface before opening the form. The thumbnail expands for review and can be
+removed. **Share report** opens the native share sheet with a PNG, a text-file
+report and the report text; the copy icon copies text only. Nothing is sent
+automatically, and screenshots are not saved to Photos.
+
+The capture is on demand, capped at a 2048-pixel longest side, 2x scale and
+8 MiB encoded PNG. A two-second limit or capture failure retains the text-only
+report. A lock/background transition during capture discards it; a locked open
+report loses its screenshot. The editor remains mounted. Temporary plaintext
+exports reuse protected media leases and are cleaned after native handoff
+finishes; a successful macOS service gets its existing-style short reading
+lease. Text-file attachment preserves context in targets that ignore captions.
+
+The capture covers Flutter content; system keyboards/status UI and native
+platform views may be absent. Native iPhone capture/share-sheet acceptance
+remains separate from fixture and source checks.
+
+35 selected full-app tests pass: rendered PNG pixels, capture ordering and
+deduplication, lock/background/timeout fallbacks, explicit sharing/removal,
+attachment contents and temporary-lease cleanup. Full app analysis has zero
+errors/warnings; final changed-file analysis is clean, with the 70 existing
+app informational findings outside this change. The strict design-token check
+passes. The production sheet was inspected in
+[dark](ux/apple/feedback-screenshot-dark.png) and
+[light](ux/apple/feedback-screenshot-light.png) fixtures, with large-text
+reachability covered by a widget test. The separate presentation harness still
+cannot start without its external source-snapshot prerequisite; these captures
+come from the full-app feedback fixture instead.
+
 ## Full-thread browsing without the long-press preview (3576)
 
 Holding an inbox row or pin opens the compact actions menu again, matching

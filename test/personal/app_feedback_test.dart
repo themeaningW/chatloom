@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:chatloom/personal/app_feedback.dart';
+import 'package:chatloom/personal/privacy.dart';
 import 'package:chatloom/personal/ui/app_feedback_sheet.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
@@ -24,6 +25,12 @@ const environment = AppFeedbackEnvironment(
 );
 
 void main() {
+  setUp(() {
+    PersonalPrivacy.surfaceUnlocked = true;
+    PersonalPrivacy.surfaceForeground = true;
+    TestWidgetsFlutterBinding.ensureInitialized()
+        .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  });
   setUpAll(() async {
     if (Platform.environment['CHATLOOM_IPHONE_CAPTURE_DIR'] == null) return;
     final text = FontLoader('Roboto');
@@ -51,63 +58,78 @@ void main() {
       expect(() => environment.report('  '), throwsFormatException);
     },
   );
-  testWidgets(
-    'phone feedback sheet presents the report and copy button together',
-    (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(
-        RepaintBoundary(
-          key: const ValueKey('feedback-capture'),
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: NotionTheme.build(
-              Brightness.dark,
-            ).copyWith(platform: TargetPlatform.iOS),
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => NotionButton(
-                  label: 'Open report',
-                  onPressed: () => showNotionSheet<void>(
-                    context: context,
-                    title: 'Report a problem',
-                    builder: (_) => AppFeedbackSheet(
-                      environment: Future.value(environment),
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'phone feedback sheet presents screenshot and actions in ${brightness.name}',
+      (tester) async {
+        final screenshot = File(
+          'docs/ux/apple/inbox-390-${brightness.name}.png',
+        ).readAsBytesSync();
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: const ValueKey('feedback-capture'),
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: NotionTheme.build(
+                brightness,
+              ).copyWith(platform: TargetPlatform.iOS),
+              home: Scaffold(
+                body: Builder(
+                  builder: (context) => NotionButton(
+                    label: 'Open report',
+                    onPressed: () => showNotionSheet<void>(
+                      context: context,
+                      title: 'Report a problem',
+                      builder: (_) => AppFeedbackSheet(
+                        environment: Future.value(environment),
+                        screenshot: screenshot,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.tap(find.text('Open report'));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byType(TextField),
-        'Example: a button disappears when I open the keyboard.',
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Copy report').hitTestable(), findsOneWidget);
-      final directory = Platform.environment['CHATLOOM_IPHONE_CAPTURE_DIR'];
-      if (directory != null) {
-        final boundary = tester.renderObject<RenderRepaintBoundary>(
-          find.byKey(const ValueKey('feedback-capture')),
         );
-        await tester.runAsync(() async {
-          final image = await boundary.toImage(pixelRatio: 2);
-          final data = await image.toByteData(format: ui.ImageByteFormat.png);
-          final file = File('$directory/feedback-sheet-dark.png');
-          await file.parent.create(recursive: true);
-          await file.writeAsBytes(data!.buffer.asUint8List());
-          image.dispose();
-        });
-      }
-      expect(tester.takeException(), isNull);
-    },
-  );
+        await tester.tap(find.text('Open report'));
+        await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => precacheImage(
+            MemoryImage(screenshot),
+            tester.element(find.byType(AppFeedbackSheet)),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byType(TextField),
+          'Example: a button disappears when I open the keyboard.',
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Share report').hitTestable(), findsOneWidget);
+        final directory = Platform.environment['CHATLOOM_IPHONE_CAPTURE_DIR'];
+        if (directory != null) {
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(const ValueKey('feedback-capture')),
+          );
+          await tester.runAsync(() async {
+            final image = await boundary.toImage(pixelRatio: 2);
+            final data = await image.toByteData(format: ui.ImageByteFormat.png);
+            final file = File(
+              '$directory/feedback-sheet-${brightness.name}.png',
+            );
+            await file.parent.create(recursive: true);
+            await file.writeAsBytes(data!.buffer.asUint8List());
+            image.dispose();
+          });
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   testWidgets(
     'copy is explicit, validates description, and works at large text',
     (tester) async {
@@ -140,16 +162,21 @@ void main() {
                 size: Size(320, 700),
                 textScaler: TextScaler.linear(2),
               ),
-              child: AppFeedbackSheet(environment: Future.value(environment)),
+              child: AppFeedbackSheet(
+                environment: Future.value(environment),
+                screenshot: File(
+                  'docs/ux/apple/inbox-390-dark.png',
+                ).readAsBytesSync(),
+              ),
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
       expect(copies, isEmpty);
-      await tester.ensureVisible(find.text('Copy report'));
+      await tester.ensureVisible(find.byTooltip('Copy text report'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Copy report'));
+      await tester.tap(find.byTooltip('Copy text report'));
       await tester.pumpAndSettle();
       expect(find.text('Describe the problem first.'), findsOneWidget);
       expect(copies, isEmpty);
@@ -157,9 +184,9 @@ void main() {
         find.byType(TextField),
         'Expected to go back. Instead nothing happens.',
       );
-      await tester.ensureVisible(find.text('Copy report'));
+      await tester.ensureVisible(find.byTooltip('Copy text report'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Copy report'));
+      await tester.tap(find.byTooltip('Copy text report'));
       await tester.pumpAndSettle();
       expect(copies, hasLength(1));
       expect(copies.single, contains('Expected to go back.'));

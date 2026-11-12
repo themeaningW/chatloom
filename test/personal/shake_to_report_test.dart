@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/personal/privacy.dart';
+import 'package:chatloom/personal/ui/app_feedback_capture.dart';
 import 'package:chatloom/personal/ui/app_feedback_sheet.dart';
 import 'package:chatloom/personal/ui/shake_to_report.dart';
 import 'package:chatloom/ui/notion/notion.dart';
@@ -73,10 +75,15 @@ void main() {
         builder: (context, child) => AppLockWidget(
           controller: lock,
           isLoggedIn: true,
-          child: ShakeToReportScope(
-            navigatorKey: navigator,
-            elapsed: () => elapsed,
-            child: child!,
+          child: AppFeedbackCaptureScope(
+            captureImage: (_, _) async => base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+            ),
+            child: ShakeToReportScope(
+              navigatorKey: navigator,
+              elapsed: () => elapsed,
+              child: child!,
+            ),
           ),
         ),
         home: Scaffold(
@@ -169,6 +176,12 @@ void main() {
       final before = draft.value;
       await emit(tester);
       expect(find.byType(AppFeedbackSheet), findsOneWidget);
+      expect(
+        tester
+            .widget<AppFeedbackSheet>(find.byType(AppFeedbackSheet))
+            .screenshot,
+        isNotNull,
+      );
       expect(find.text('Report a problem'), findsOneWidget);
       await emit(tester);
       await showAppFeedback(manualContext);

@@ -2,8 +2,10 @@
 
 Shake ChatLoom while it is foreground and unlocked to open the existing
 **Report a problem** sheet. It works on login/onboarding screens too. Write
-the problem and tap **Copy report** to share it yourself. Nothing is submitted,
-captured from chats or screenshotted automatically.
+the problem and tap **Share report** to choose where to send it. The app now
+captures its visible Flutter surface before opening the sheet. Review the
+image by tapping it, or use **Remove screenshot** before sharing. Nothing is
+submitted automatically. The copy icon copies the text report only.
 
 **Settings → Advanced → Shake to report** turns the shortcut off/on. It defaults
 to on. Manual **Report a problem** remains available with this switch off or

@@ -61,7 +61,7 @@ class AppFeedbackEnvironment {
 
   String get summary => 'ChatLoom $version ($build) · $platform';
 
-  String report(String description) {
+  String report(String description, {bool screenshotAttached = false}) {
     final text = description.trim();
     if (text.isEmpty) {
       throw const FormatException('Describe the problem first.');
@@ -76,7 +76,7 @@ Display: $width × $height logical pixels; ${dark ? 'dark' : 'light'}
 Text scale: ${textScale.toStringAsFixed(2)}
 Reduce Motion: ${reducedMotion ? 'on' : 'off'}
 
-Attach a screenshot or screen recording if helpful. Check it for private content before sharing.
+Screenshot: ${screenshotAttached ? 'attached' : 'not attached'}
 ''';
   }
 }

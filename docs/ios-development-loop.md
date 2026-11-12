@@ -14,17 +14,25 @@ Normal editing/undo controls remain. No report or screenshot is sent automatical
 See [native behavior and validation limits](ios-shake-to-report.md).
 
 1. Open **Settings → Advanced → Report a problem**.
-2. Describe the steps, expected result and actual result. Tap **Copy report**.
-3. Paste it in the development conversation and attach a screenshot or a short
-   screen recording. For a gesture, a recording is usually more useful.
+2. A screenshot is captured before the form opens. Tap its thumbnail to review
+   it or **Remove screenshot** to omit it. Describe the steps and expected result.
+3. Tap **Share report** to share the PNG and a text report through the system
+   sheet. The copy icon copies text only. A gesture can still benefit from a
+   separately attached short screen recording.
 4. For layout, mention whether the keyboard was open; for a delivery problem,
    mention the network and whether ChatLoom was open, backgrounded or closed.
 
-The copied report adds version/build, OS version where available, logical
-screen size, text scale, appearance and Reduce Motion. It does not read account
-identifiers, chats, logs, server configuration or tokens, and submits nothing.
-Review screenshots before sharing them. One issue per report makes regressions
-and retesting easier to track.
+The text report adds version/build, OS version where available, logical screen
+size, text scale, appearance and Reduce Motion. It does not query chats, account
+identifiers, logs, server configuration or tokens. The screenshot includes the
+visible app content, so review it before sharing. Captures stay in memory until
+explicit sharing; native attachments use protected temporary-file leases and
+are cleaned after sharing (macOS services get a short reading lease). No copy
+is saved to Photos. Locking removes the screenshot from the open report.
+
+This captures Flutter app content. Native keyboard, status UI or platform views
+may not appear; record a keyboard/gesture issue separately when needed. One
+issue per report makes regressions and retesting easier to track.
 
 ## Fix and verify
 

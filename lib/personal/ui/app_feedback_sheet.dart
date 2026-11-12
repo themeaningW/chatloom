@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'dart:async';
+
 import 'package:chatloom/personal/app_feedback.dart';
+import 'package:chatloom/personal/app_feedback_share.dart';
 import 'package:chatloom/personal/privacy.dart';
+import 'package:chatloom/personal/ui/app_feedback_capture.dart';
 import 'package:chatloom/ui/notion/notion.dart';
+import 'package:chatloom/widgets/app_lock.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -20,6 +26,8 @@ Future<void> showAppFeedback(BuildContext context) async {
   final owner = _feedbackOwner = Object();
   _feedbackNavigator = Navigator.of(context);
   try {
+    final generation = PersonalPrivacy.surfaceGeneration;
+    final route = ModalRoute.of(context);
     final media = MediaQuery.of(context);
     final environment = AppFeedbackEnvironment.capture(
       width: media.size.width.round(),
@@ -28,10 +36,20 @@ Future<void> showAppFeedback(BuildContext context) async {
       dark: Theme.of(context).brightness == Brightness.dark,
       reducedMotion: NotionMotion.reduced(context),
     );
+    final screenshot = await AppFeedbackCaptureScope.capture(context);
+    if (!context.mounted ||
+        generation != PersonalPrivacy.surfaceGeneration ||
+        !PersonalPrivacy.surfaceUnlocked ||
+        !PersonalPrivacy.surfaceForeground ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+        (route != null && !route.isCurrent)) {
+      return;
+    }
     await showNotionSheet<void>(
       context: context,
       title: 'Report a problem',
-      builder: (_) => AppFeedbackSheet(environment: environment),
+      builder: (_) =>
+          AppFeedbackSheet(environment: environment, screenshot: screenshot),
     );
   } finally {
     if (identical(_feedbackOwner, owner)) {
@@ -42,8 +60,15 @@ Future<void> showAppFeedback(BuildContext context) async {
 }
 
 class AppFeedbackSheet extends StatefulWidget {
-  const AppFeedbackSheet({super.key, required this.environment});
+  const AppFeedbackSheet({
+    super.key,
+    required this.environment,
+    this.screenshot,
+    @visibleForTesting this.share,
+  });
   final Future<AppFeedbackEnvironment> environment;
+  final Uint8List? screenshot;
+  final Future<void> Function(String, Uint8List?, Rect)? share;
   @override
   State<AppFeedbackSheet> createState() => _AppFeedbackSheetState();
 }
@@ -52,14 +77,57 @@ class _AppFeedbackSheetState extends State<AppFeedbackSheet> {
   final _description = TextEditingController();
   String? _error;
   bool _busy = false;
+  Uint8List? _screenshot;
+  bool _expanded = false;
+  bool _removed = false;
+  AppLockController? _lock;
+
+  @override
+  void initState() {
+    super.initState();
+    _screenshot = widget.screenshot;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final lock = context.findAncestorStateOfType<AppLock>()?.controller;
+    if (!identical(lock, _lock)) {
+      _lock?.removeListener(_privacyChanged);
+      _lock = lock?..addListener(_privacyChanged);
+    }
+    if (_lock?.isLocked == true) _dropScreenshot();
+  }
+
+  void _dropScreenshot() {
+    final bytes = _screenshot;
+    _screenshot = null;
+    _expanded = false;
+    _removed = true;
+    if (bytes != null) unawaited(MemoryImage(bytes).evict());
+  }
+
+  void _privacyChanged() {
+    if (_lock?.isLocked == true && mounted) setState(_dropScreenshot);
+  }
+
+  bool get _allowed =>
+      mounted &&
+      PersonalPrivacy.surfaceUnlocked &&
+      PersonalPrivacy.surfaceForeground &&
+      _lock?.isLocked != true &&
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+      ModalRoute.of(context)?.isCurrent == true;
   @override
   void dispose() {
+    _lock?.removeListener(_privacyChanged);
+    _dropScreenshot();
     _description.dispose();
     super.dispose();
   }
 
   Future<void> _copy(AppFeedbackEnvironment environment) async {
-    if (_busy) return;
+    if (_busy || !_allowed) return;
     try {
       final report = environment.report(_description.text);
       setState(() {
@@ -70,9 +138,7 @@ class _AppFeedbackSheetState extends State<AppFeedbackSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Copied. Add a screenshot or recording when sharing it.',
-          ),
+          content: Text('Text report copied.'),
         ),
       );
     } catch (e) {
@@ -81,6 +147,54 @@ class _AppFeedbackSheetState extends State<AppFeedbackSheet> {
           () => _error = e is FormatException
               ? e.message
               : 'Couldn’t copy the report. Try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _share(
+    AppFeedbackEnvironment environment,
+    BuildContext anchor,
+  ) async {
+    if (_busy || !_allowed) return;
+    try {
+      final bytes = _screenshot;
+      final report = environment.report(
+        _description.text,
+        screenshotAttached: bytes != null,
+      );
+      final box = anchor.findRenderObject() as RenderBox?;
+      final origin = box == null || !box.hasSize || box.size.isEmpty
+          ? Rect.fromCenter(
+              center: MediaQuery.sizeOf(context).center(Offset.zero),
+              width: 1,
+              height: 1,
+            )
+          : box.localToGlobal(Offset.zero) & box.size;
+      final generation = PersonalPrivacy.surfaceGeneration;
+      setState(() {
+        _busy = true;
+        _error = null;
+      });
+      if (widget.share case final share?) {
+        await share(report, bytes, origin);
+      } else {
+        await shareAppFeedback(
+          report,
+          bytes,
+          origin,
+          isCurrent: () =>
+              _allowed && generation == PersonalPrivacy.surfaceGeneration,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _error = e is FormatException
+              ? e.message
+              : 'Couldn’t share the report. Try again.',
         );
       }
     } finally {
@@ -110,6 +224,52 @@ class _AppFeedbackSheetState extends State<AppFeedbackSheet> {
             error: _error,
           ),
           const SizedBox(height: NotionSpace.md),
+          if (_screenshot case final bytes?) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Screenshot',
+                    style: context.notion.typography.captionMuted,
+                  ),
+                ),
+                NotionIconButton(
+                  icon: Icons.close,
+                  label: 'Remove screenshot',
+                  onPressed: _busy ? null : () => setState(_dropScreenshot),
+                ),
+              ],
+            ),
+            Semantics(
+              button: true,
+              label: _expanded ? 'Collapse screenshot' : 'Preview screenshot',
+              child: NotionPressable(
+                onTap: _busy
+                    ? null
+                    : () => setState(() => _expanded = !_expanded),
+                child: ClipRRect(
+                  borderRadius: NotionRadius.smAll,
+                  child: SizedBox(
+                    height: _expanded
+                        ? NotionSize.sheetDialogMaxHeight / 2
+                        : NotionSize.touchTarget * 2,
+                    child: Image.memory(
+                      bytes,
+                      fit: BoxFit.contain,
+                      excludeFromSemantics: true,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: NotionSpace.md),
+          ] else if (!_removed) ...[
+            Text(
+              'Screenshot unavailable',
+              style: context.notion.typography.captionMuted,
+            ),
+            const SizedBox(height: NotionSpace.md),
+          ],
           FutureBuilder<AppFeedbackEnvironment>(
             future: widget.environment,
             builder: (context, snapshot) => Column(
@@ -121,17 +281,35 @@ class _AppFeedbackSheetState extends State<AppFeedbackSheet> {
                   style: context.notion.typography.captionMuted,
                 ),
                 const SizedBox(height: NotionSpace.md),
-                NotionButton.primary(
-                  icon: Icons.copy_outlined,
-                  label: 'Copy report',
-                  busy: _busy,
-                  onPressed: _busy || snapshot.data == null
-                      ? null
-                      : () => _copy(snapshot.data!),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Builder(
+                        builder: (anchor) => NotionButton.primary(
+                          icon: Icons.ios_share,
+                          label: 'Share report',
+                          busy: _busy,
+                          onPressed: _busy || snapshot.data == null
+                              ? null
+                              : () => _share(snapshot.data!, anchor),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: NotionSpace.xs),
+                    NotionIconButton(
+                      icon: Icons.copy_outlined,
+                      label: 'Copy text report',
+                      onPressed: _busy || snapshot.data == null
+                          ? null
+                          : () => _copy(snapshot.data!),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: NotionSpace.xs),
                 Text(
-                  'Includes display settings. No chats or logs are collected.',
+                  _screenshot != null
+                      ? 'Review the screenshot before sharing. No logs attached.'
+                      : 'Includes display settings. No logs attached.',
                   style: context.notion.typography.captionMuted,
                 ),
               ],
