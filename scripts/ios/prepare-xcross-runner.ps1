@@ -27,12 +27,13 @@ foreach ($directory in @($buildRoot, $helperRoot, $runnerRoot)) {
 }
 $helperPath = Join-Path $helperRoot 'clang.exe'
 if (-not $ClangPath) {
-    $ClangPath = $env:XCROSS_APPLE_TOOL_CLANG
+    $ClangPath = $env:CC
+    if (-not $ClangPath) { $ClangPath = $env:XCROSS_APPLE_TOOL_CLANG }
     if ($ClangPath -and [IO.Path]::GetFullPath($ClangPath) -eq $helperPath) {
         $ClangPath = $env:CHATLOOM_XCROSS_REAL_CLANG
     }
     if (-not $ClangPath) {
-        throw 'Pass -ClangPath matching the real compiler selected by xcross (or retain its existing XCROSS_APPLE_TOOL_CLANG override)'
+        throw 'Pass -ClangPath matching the real compiler selected by xcross (or retain its existing CC override)'
     }
 }
 $realClang = (Resolve-Path -LiteralPath $ClangPath).Path
@@ -55,7 +56,10 @@ internal static class ChatLoomClang {
     private static readonly string RealClang = Decode("__CLANG__");
     private static readonly string RunnerSource = Decode("__RUNNER__");
     private const string Marker = "// ChatLoom: restore Flutter notification delegate after plugin registration.";
-    private const string Delegate = "[UNUserNotificationCenter currentNotificationCenter].delegate = self;";
+    // xcross links Runner using ld64.lld directly and omits UserNotifications.
+    // Resolve its already loaded class through Foundation instead of adding an
+    // undefined Objective-C class symbol to that separately linked executable.
+    private const string Delegate = "[(UNUserNotificationCenter *)[NSClassFromString(@\"UNUserNotificationCenter\") currentNotificationCenter] setDelegate:self];";
     private const string NotificationImport = "#import <UserNotifications/UserNotifications.h>";
     private static string Decode(string value) { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
     private static bool SamePath(string value, string expected) {
@@ -123,20 +127,13 @@ internal static class ChatLoomClang {
     }
     private static int Main(string[] arguments) {
         try {
-            string runnerDirectory = Path.GetDirectoryName(RunnerSource);
-            string runnerObject = Path.Combine(runnerDirectory, "Runner.o");
-            string runnerBinary = Path.Combine(runnerDirectory, "Runner");
-            bool compilesRunner = false, linksRunnerObject = false, writesRunner = false, hasFramework = false;
+            bool compilesRunner = false;
             for (int i = 0; i < arguments.Length; i++) {
                 compilesRunner |= SamePath(arguments[i], RunnerSource);
-                linksRunnerObject |= SamePath(arguments[i], runnerObject);
-                if (i + 1 < arguments.Length && arguments[i] == "-o") writesRunner |= SamePath(arguments[i + 1], runnerBinary);
-                if (i + 1 < arguments.Length && arguments[i] == "-framework" && arguments[i + 1] == "UserNotifications") hasFramework = true;
             }
             if (compilesRunner) PrepareRunner();
             StringBuilder forwarded = new StringBuilder();
             foreach (string argument in arguments) forwarded.Append(Quote(argument)).Append(' ');
-            if (linksRunnerObject && writesRunner && !hasFramework) forwarded.Append("-framework UserNotifications");
             ProcessStartInfo start = new ProcessStartInfo(RealClang, forwarded.ToString());
             start.UseShellExecute = false;
             using (Process child = Process.Start(start)) { child.WaitForExit(); return child.ExitCode; }
@@ -165,5 +162,10 @@ if (-not (Test-Path -LiteralPath $sourcePath) -or
     if ($LASTEXITCODE -ne 0) { throw 'Failed to compile the scoped clang helper' }
 }
 $env:CHATLOOM_XCROSS_REAL_CLANG = $realClang
-$env:XCROSS_APPLE_TOOL_CLANG = $helperPath
+# RunnerShim uses DarwinToolchainResolver's explicit CC override. The separate
+# XCROSS_APPLE_TOOL_CLANG knob only affects other build paths in xcross 2.0.9.
+$env:CC = $helperPath
+if ($env:XCROSS_APPLE_TOOL_CLANG -eq $helperPath) {
+    $env:XCROSS_APPLE_TOOL_CLANG = $realClang
+}
 Write-Output 'Prepared xcross notification runner hook for this PowerShell session.'

@@ -55,11 +55,15 @@ the current lab's generated SwiftPM toolset selects this LLVM installation:
 & .\scripts\ios\prepare-xcross-runner.ps1 -ProjectPath (Get-Location).Path -ClangPath 'C:\Program Files\LLVM\bin\clang.exe'
 ```
 
-The helper builds a small managed compiler shim under `build/` and sets a
-process-local `XCROSS_APPLE_TOOL_CLANG` override. It forwards compiler arguments
-and exit status, prepares only this checkout's generated
-`build/xcross-flutter-runner-bin/Runner.m` immediately before compilation, and
-adds the UserNotifications framework only when linking that runner. This is
+The helper builds a small managed compiler shim under `build/` and sets the
+process-local `CC` override used by xcross's Darwin runner compiler selector.
+(`XCROSS_APPLE_TOOL_CLANG` affects other build paths and does not select the
+runner compiler in xcross 2.0.9.) It forwards compiler arguments and exit status
+unchanged and prepares only this checkout's generated
+`build/xcross-flutter-runner-bin/Runner.m` immediately before compilation. The
+Objective-C hook resolves the notification-center class through Foundation;
+this avoids a new framework link dependency in xcross's separately linked
+runner. UserNotifications is already loaded by the registered native plugins. This is
 repeatable even when xcross regenerates the source. An unexpected runner
 template fails before compilation. It changes no xcross binary, package source,
 entitlement or credential. Run the preparation again in each new PowerShell
@@ -67,9 +71,13 @@ session; a standalone patch to generated Runner.m would be overwritten.
 
 `scripts/ios/test-prepare-xcross-runner.ps1` checks the shim against a synthetic
 compiler, including argument quoting, regeneration, idempotence, path scope,
-link-framework scope and rejection of an unsupported template. These checks
+unchanged linker arguments and rejection of an unsupported template. These checks
 do not establish real-device notification delivery. Xcode builds use the Swift
 AppDelegate directly and do not need this Windows helper.
+
+The xcross-specific selectors are documented in its pinned
+[runner source](https://raw.githubusercontent.com/arxdeus/xcross/v2.0.9/packages/xcross/lib/src/shared/flutter/build/runner_shim.dart)
+and [Darwin toolchain resolver](https://raw.githubusercontent.com/arxdeus/xcross/v2.0.9/packages/darwin_sdk_kit/lib/shared/toolchain/darwin_toolchain_resolver.dart).
 
 ## Sources
 
