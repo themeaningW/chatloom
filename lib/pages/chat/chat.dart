@@ -2167,16 +2167,7 @@ class ChatController extends State<ChatPageWithRoom>
 
   Future<void> sendImageFromClipBoard(Uint8List? image) async {
     if (image == null) return;
-    await _pickAttachments(
-      () async => [
-        XFile.fromData(
-          image,
-          name: 'pasted-image.png',
-          path: 'pasted-image.png',
-          mimeType: 'image/png',
-        ),
-      ],
-    );
+    await _pickAttachments(() async => [composerClipboardImage(image)]);
   }
 
   Future<void> openGalleryAction() =>
@@ -2233,7 +2224,8 @@ class ChatController extends State<ChatPageWithRoom>
     // Plain text never enters the attachment picker: unfocusing the field
     // changes its selection/composing state and used to discard this paste.
     final text = clipboard.text;
-    if (text != null && sendController.value == editorValue) {
+    if (text != null &&
+        composerValueUnchangedForPaste(sendController.value, editorValue)) {
       onInputBarChanged(insertComposerText(sendController, text));
     }
   }

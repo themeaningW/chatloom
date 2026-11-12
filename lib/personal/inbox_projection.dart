@@ -10,7 +10,8 @@ import 'package:chatloom/personal/push_rule_mirror.dart';
 import 'package:matrix/matrix.dart';
 import 'package:personal_core/personal_core.dart';
 
-export 'package:personal_core/personal_core.dart' show InboxFilter, InboxRecord;
+export 'package:personal_core/personal_core.dart'
+    show InboxFilter, InboxRecord, InboxSort;
 
 /// Private inbox presentation. It never changes native room membership/state.
 class InboxProjection {
@@ -370,6 +371,7 @@ class InboxProjection {
   List<Room> rooms(
     Iterable<Room> input, {
     InboxFilter filter = InboxFilter.inbox,
+    InboxSort sort = InboxSort.latestActivity,
     String query = '',
     String? labelKey,
   }) {
@@ -377,6 +379,7 @@ class InboxProjection {
     return projection.select(
       projection.buildIndex(input),
       filter: filter,
+      sort: sort,
       query: query,
     );
   }
@@ -547,6 +550,7 @@ class InboxProjection {
   List<Room> select(
     InboxIndex index, {
     InboxFilter filter = InboxFilter.inbox,
+    InboxSort sort = InboxSort.latestActivity,
     String query = '',
   }) {
     final records = index.records;
@@ -554,6 +558,7 @@ class InboxProjection {
     final visible = projectInbox(
       records,
       filter: filter == InboxFilter.label ? InboxFilter.inbox : filter,
+      sort: sort,
       query: query,
     );
     if (filter == InboxFilter.inbox) {
@@ -579,7 +584,12 @@ class InboxProjection {
           ids.add(record.entityId);
         }
       }
-      return projectInbox(records, filter: InboxFilter.all, query: query)
+      return projectInbox(
+            records,
+            filter: InboxFilter.all,
+            query: query,
+            sort: sort,
+          )
           .where((r) => ids.contains(r.entityId))
           .map((r) => index._representatives[r.representativeRoomId]!)
           .toList(growable: false);

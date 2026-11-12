@@ -2,6 +2,10 @@
 import 'organization.dart';
 import 'network_preferences.dart';
 
+/// Device-local presentation order; read state is a filter unless explicitly
+/// chosen as a priority. Pins retain their deliberate saved order in all modes.
+enum InboxSort { latestActivity, oldestActivity, unreadFirst }
+
 enum InboxFilter {
   inbox,
   unread,
@@ -71,6 +75,7 @@ class InboxRecord {
 List<InboxRecord> projectInbox(
   Iterable<InboxRecord> records, {
   InboxFilter filter = InboxFilter.inbox,
+  InboxSort sort = InboxSort.latestActivity,
   String query = '',
   String? labelKey,
   Set<String> hiddenLabelKeys = const {},
@@ -142,12 +147,14 @@ List<InboxRecord> projectInbox(
     if (a.metadata.isPinned) {
       final pin = a.metadata.pinOrder!.compareTo(b.metadata.pinOrder!);
       if (pin != 0) return pin;
-    } else if (_raised(a) != _raised(b)) {
+    } else if (sort == InboxSort.unreadFirst && _raised(a) != _raised(b)) {
       return _raised(a) ? -1 : 1;
     }
     final time = (b.lastActivity ?? DateTime.fromMillisecondsSinceEpoch(0))
         .compareTo(a.lastActivity ?? DateTime.fromMillisecondsSinceEpoch(0));
-    return time != 0 ? time : a.entityId.compareTo(b.entityId);
+    return time != 0
+        ? (sort == InboxSort.oldestActivity ? -time : time)
+        : a.entityId.compareTo(b.entityId);
   });
   return List.unmodifiable(result);
 }

@@ -13,10 +13,12 @@ import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/l10n/l10n.dart';
 import 'package:chatloom/personal/deleted_messages.dart';
 import 'package:chatloom/personal/inbox_projection.dart';
+import 'package:chatloom/personal/ios_local_notifications.dart';
 import 'package:chatloom/personal/kept_messages.dart';
 import 'package:chatloom/personal/message_notification.dart';
 import 'package:chatloom/personal/message_preview.dart';
 import 'package:chatloom/personal/notification_eligibility.dart';
+import 'package:chatloom/personal/notification_presentation_guard.dart';
 import 'package:chatloom/personal/notification_threads.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/utils/platform_infos.dart';
@@ -78,16 +80,26 @@ Future<void> showKeptDeletionNotification(
   L10n? l10n,
 }) async {
   if (!PlatformInfos.supportsSystemNotifications) return;
+  final event = kept.toEvent(room);
+  final guard = NotificationPresentationGuard(
+    event,
+    ownerCurrent: () => !(chatOpen?.call(room) ?? false),
+  );
+  if (!guard.current) return;
+  if (PlatformInfos.isIOS && plugin == null) {
+    await IosLocalNotifications.instance.initialize();
+    if (!guard.current) return;
+  }
   if (chatOpen?.call(room) ?? false) return;
   final client = room.client;
   final personal = PersonalClient.of(client);
   try {
     await personal.loadLocal();
+    if (!guard.current) return;
   } catch (_) {
     return;
   }
   final projection = InboxProjection(personal);
-  final event = kept.toEvent(room);
   if (!await personalNotificationEligible(
     event,
     projection.metadataFor(room),
@@ -96,7 +108,9 @@ Future<void> showKeptDeletionNotification(
   )) {
     return;
   }
+  if (!guard.current) return;
   final locked = await personalAppLockConfigured();
+  if (!guard.current) return;
   final previews = !locked && AppSettings.personalNotificationPreviews.value;
   final text = deletionNotificationText(
     previews: previews,
@@ -112,8 +126,10 @@ Future<void> showKeptDeletionNotification(
   final notifications = plugin ?? FlutterLocalNotificationsPlugin();
   if (PlatformInfos.isAndroid) {
     await PersonalNotificationChannels.ensure(notifications);
+    if (!guard.current) return;
   }
   final thread = notificationThreadOf(client.clientName, room, projection);
+  if (!guard.current) return;
   await notifications.show(
     id: deletionNotificationId(client.clientName, room.id, kept.eventId),
     title: text.title,
@@ -134,6 +150,7 @@ Future<void> showKeptDeletionNotification(
       macOS: DarwinNotificationDetails(
         threadIdentifier: thread.threadIdentifier,
       ),
+      iOS: DarwinNotificationDetails(threadIdentifier: thread.threadIdentifier),
     ),
     payload: ChatLoomPushPayload(
       client.clientName,

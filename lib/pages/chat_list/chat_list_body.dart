@@ -96,6 +96,8 @@ class _ChatListViewBodyState extends State<ChatListViewBody> {
           });
         }
         return NotionInboxPage(
+          sort: controller.inboxSort,
+          onSortSelected: controller.setInboxSort,
           unreadCount: usable ? controller.unreadViewCount() : 0,
           requestCount: usable ? controller.requestViewCount() : 0,
           scrollController: controller.scrollController,

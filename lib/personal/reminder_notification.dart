@@ -197,6 +197,7 @@ Future<PushOutcome> presentDueReminder(
               ),
             ),
             macOS: const DarwinNotificationDetails(),
+            iOS: const DarwinNotificationDetails(),
           ),
           payload: ChatLoomPushPayload(
             client.clientName,

@@ -27,6 +27,149 @@ Widget host(Widget child, {double scale = 1}) => MaterialApp(
 
 Widget avatar() => const ColoredBox(color: Color(0xFF555555));
 void main() {
+  testWidgets(
+    'large text scales row content while decorative avatar initials stay bounded',
+    (tester) async {
+      var avatarScale = 0.0;
+      await tester.pumpWidget(
+        host(
+          NotionInboxRow(
+            avatar: Builder(
+              builder: (context) {
+                avatarScale = MediaQuery.textScalerOf(context).scale(1);
+                return const NotionInitialAvatar(name: 'Ada');
+              },
+            ),
+            name: 'Ada',
+            preview: 'Readable message',
+            unreadCount: 3,
+            onTap: () {},
+          ),
+          scale: 2,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(avatarScale, 1);
+      for (final content in ['Ada', 'Readable message', '3']) {
+        expect(
+          MediaQuery.textScalerOf(tester.element(find.text(content))).scale(1),
+          2,
+          reason: 'Only decorative avatar lettering opts out of Dynamic Type',
+        );
+      }
+      final initial = tester.getRect(find.text('A'));
+      final circle = tester.getRect(find.byType(NotionInitialAvatar));
+      expect(initial.width, lessThanOrEqualTo(circle.width));
+      expect(initial.height, lessThanOrEqualTo(circle.height));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets('sort choices are reachable and notify the selected order', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var sort = InboxSort.latestActivity;
+    await tester.pumpWidget(
+      host(
+        StatefulBuilder(
+          builder: (context, setState) => NotionInboxPage(
+            rows: const [],
+            pins: const [],
+            networks: const ['whatsapp'],
+            onSettings: () {},
+            onSearch: () {},
+            onNetworkSelected: (_) {},
+            sort: sort,
+            onSortSelected: (value) => setState(() => sort = value),
+          ),
+        ),
+        scale: 2,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final target = find.byTooltip('Sort chats');
+    expect(tester.getSize(target).height, greaterThanOrEqualTo(44));
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Oldest activity'));
+    await tester.pumpAndSettle();
+    expect(sort, InboxSort.oldestActivity);
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unread first'));
+    await tester.pumpAndSettle();
+    expect(sort, InboxSort.unreadFirst);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  for (final size in [
+    const Size(320, 568),
+    const Size(390, 844),
+    const Size(1200, 800),
+  ]) {
+    testWidgets(
+      'inbox toolbar and search stay usable at $size with Dynamic Type',
+      (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        var settings = 0;
+        var searches = 0;
+        final scroll = ScrollController();
+        await tester.pumpWidget(
+          host(
+            NotionInboxPage(
+              scrollController: scroll,
+              pins: const [],
+              networks: const ['whatsapp', 'instagram'],
+              onSettings: () => settings++,
+              onSearch: () => searches++,
+              onNetworkSelected: (_) {},
+              rows: [
+                for (var i = 0; i < 20; i++)
+                  NotionInboxRow(
+                    avatar: avatar(),
+                    name: 'Conversation $i',
+                    preview: 'A readable fictional message preview',
+                    time: '16:45',
+                    onTap: () {},
+                  ),
+              ],
+            ),
+            scale: 2,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.byType(NotionInboxDock), findsNothing);
+        await tester.tap(find.text('Search'));
+        expect(searches, 1);
+        scroll.jumpTo(scroll.position.maxScrollExtent);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.tap(find.byTooltip('New message'));
+        expect(settings, 1);
+        expect(searches, 2);
+        expect(
+          tester.getTopLeft(find.byTooltip('Settings')).dy,
+          greaterThanOrEqualTo(44),
+        );
+        expect(
+          tester.getSize(find.byTooltip('New message')).height,
+          greaterThanOrEqualTo(44),
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        scroll.dispose();
+      },
+    );
+  }
+
   testWidgets('storage failure hides saved rows and offers a local retry', (
     tester,
   ) async {
@@ -184,13 +327,17 @@ void main() {
       await row();
       final read = background();
       expect(
+        tester.widget<Text>(find.text('Ada')).style!.fontWeight,
+        FontWeight.w500,
+      );
+      expect(
         tester.getSize(find.byType(NotionInboxRow)).height,
         greaterThanOrEqualTo(66),
       );
       await row(unread: true);
       expect(background(), isNot(read));
       final title = tester.widget<Text>(find.text('Ada'));
-      expect(title.style!.fontWeight, FontWeight.w700);
+      expect(title.style!.fontWeight, FontWeight.w600);
       expect(
         NotionContrast.ratio(title.style!.color!, background()),
         greaterThanOrEqualTo(4.5),
@@ -207,7 +354,7 @@ void main() {
       expect(background(), read);
       expect(
         tester.widget<Text>(find.text('Ada')).style!.fontWeight,
-        FontWeight.w700,
+        FontWeight.w600,
       );
       await row();
       expect(background(), read);
@@ -473,7 +620,7 @@ void main() {
     },
   );
   testWidgets(
-    'large text at small width keeps controls and final row above dock',
+    'large text keeps toolbar actions reachable and the final row unobscured',
     (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1;
@@ -514,8 +661,29 @@ void main() {
           matching: find.byType(NotionInboxRow),
         ),
       );
-      final dock = tester.getTopLeft(find.byType(NotionInboxDock));
-      expect(row.dy, lessThan(dock.dy));
+      expect(find.byType(NotionInboxDock), findsNothing);
+      expect(row.dy, lessThanOrEqualTo(568 - 34));
+      expect(
+        tester
+            .getTopLeft(
+              find.ancestor(
+                of: find.text('A very long conversation name 11'),
+                matching: find.byType(NotionInboxRow),
+              ),
+            )
+            .dy,
+        greaterThan(tester.getBottomLeft(find.byTooltip('New message')).dy),
+      );
+      expect(
+        tester.getTopLeft(find.byTooltip('Settings')).dy,
+        greaterThanOrEqualTo(0),
+      );
+      expect(
+        tester.getBottomLeft(find.byTooltip('New message')).dy,
+        lessThan(568),
+      );
+      scroll.jumpTo(0);
+      await tester.pumpAndSettle();
       expect(find.text('Search'), findsOneWidget);
       final searchText = tester.widget<Text>(find.text('Search'));
       expect(searchText.maxLines, 1);
@@ -581,46 +749,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('row marks manual unread with a dot and brightens the time', (
-    tester,
-  ) async {
-    Future<Color?> timeColor({
-      int count = 0,
-      bool unread = false,
-      bool muted = false,
-    }) async {
-      await tester.pumpWidget(
-        host(
-          NotionInboxRow(
-            avatar: avatar(),
-            name: 'Ada',
-            preview: 'Preview',
-            time: '09:12',
-            unreadCount: count,
-            unread: unread,
-            muted: muted,
-            onTap: () {},
+  testWidgets(
+    'row marks unread with a dot and name weight while timestamps stay quiet',
+    (tester) async {
+      Future<Color?> timeColor({
+        int count = 0,
+        bool unread = false,
+        bool muted = false,
+      }) async {
+        await tester.pumpWidget(
+          host(
+            NotionInboxRow(
+              avatar: avatar(),
+              name: 'Ada',
+              preview: 'Preview',
+              time: '09:12',
+              unreadCount: count,
+              unread: unread,
+              muted: muted,
+              onTap: () {},
+            ),
           ),
-        ),
-      );
-      return tester.widget<Text>(find.text('09:12')).style?.color;
-    }
+        );
+        return tester.widget<Text>(find.text('09:12')).style?.color;
+      }
 
-    final read = await timeColor();
-    final manual = await timeColor(unread: true);
-    expect(find.byKey(const ValueKey('notion_inbox_unread_dot')), findsOne);
-    expect(find.text('•'), findsNothing);
-    expect(
-      tester.getSize(find.byKey(const ValueKey('notion_inbox_unread_dot'))),
-      const Size.square(10),
-    );
-    expect(manual, isNot(read));
-    final counted = await timeColor(count: 4);
-    expect(counted, manual);
-    expect(find.text('4'), findsOneWidget);
-    expect(find.byKey(const ValueKey('notion_inbox_unread_dot')), findsNothing);
-    expect(await timeColor(count: 4, muted: true), read);
-  });
+      final read = await timeColor();
+      final manual = await timeColor(unread: true);
+      expect(find.byKey(const ValueKey('notion_inbox_unread_dot')), findsOne);
+      expect(find.text('•'), findsNothing);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('notion_inbox_unread_dot'))),
+        const Size.square(10),
+      );
+      expect(manual, read);
+      expect(
+        tester.widget<Text>(find.text('Ada')).style!.fontWeight,
+        FontWeight.w600,
+      );
+      final counted = await timeColor(count: 4);
+      expect(counted, manual);
+      expect(find.text('4'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('notion_inbox_unread_dot')),
+        findsNothing,
+      );
+      expect(await timeColor(count: 4, muted: true), read);
+    },
+  );
 
   testWidgets('row exposes full unread identity in semantics despite ellipsis', (
     tester,

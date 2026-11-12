@@ -348,7 +348,9 @@ class _CompactComposerState extends State<CompactComposer>
                       curve: NotionMotion.standard,
                       alignment: Alignment.bottomCenter,
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 50),
+                        constraints: const BoxConstraints(
+                          minHeight: NotionSize.composerFieldHeight,
+                        ),
                         child: Stack(
                           fit: StackFit.passthrough,
                           children: [
@@ -378,8 +380,12 @@ class _CompactComposerState extends State<CompactComposer>
                                 ),
                                 Expanded(
                                   child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal:
+                                          constraints.maxWidth <
+                                              NotionSize.dialogMaxWidth
+                                          ? NotionSpace.xxs
+                                          : NotionSpace.sm,
                                     ),
                                     child: widget.input,
                                   ),

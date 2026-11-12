@@ -80,7 +80,11 @@ Widget _host(Widget child, {double scale = 1, double keyboard = 0}) =>
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         locale: const Locale('en'),
-        theme: NotionTheme.build(Brightness.dark),
+        theme: NotionTheme.build(
+          Platform.environment['NOTION_CAPTURE_LIGHT'] == '1'
+              ? Brightness.light
+              : Brightness.dark,
+        ),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(scale),
@@ -117,6 +121,7 @@ Widget _inbox({bool empty = false, int extraPins = 0}) {
   ];
   return Scaffold(
     body: NotionInboxPage(
+      onSortSelected: (_) {},
       rows: empty
           ? []
           : [
@@ -556,6 +561,15 @@ void main() {
     await _save(tester, 'inbox-390');
     await _scrollUnderChrome(tester);
     await _save(tester, 'inbox-390-scrolled', scrollToTop: false);
+    // The network control scrolls with content below the pinned Chats header.
+    // Return to the top before opening it instead of tapping through the header.
+    tester
+        .state<ScrollableState>(
+          find.byWidgetPredicate((widget) => widget is Scrollable).first,
+        )
+        .position
+        .jumpTo(0);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('All networks'));
     await _save(tester, 'network-filter-390');
     await tester.binding.handlePopRoute();

@@ -3,11 +3,7 @@
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/pages/chat_list/chat_actions_menu.dart';
 import 'package:chatloom/pages/chat_list/chat_list.dart'
-    show
-        chatMenuItems,
-        clearInboxMovedDown,
-        moveInboxRowDown,
-        moveInboxRowUp;
+    show chatMenuItems, clearInboxMovedDown, moveInboxRowDown, moveInboxRowUp;
 import 'package:chatloom/personal/inbox_projection.dart';
 import 'package:chatloom/personal/person_merge.dart';
 import 'package:chatloom/personal/personal_client.dart';
@@ -526,6 +522,36 @@ void main() {
     ]);
   });
 
+  test('chronological sorting hides unread-priority move actions', () async {
+    signal.notificationCount = 1;
+    Iterable<ChatMenuAction> actions([
+      InboxSort sort = InboxSort.latestActivity,
+    ]) => chatMenuItems(
+      personal,
+      signal,
+      pinLabel: 'Pin',
+      unpinLabel: 'Unpin',
+      sort: sort,
+    ).map((item) => item.action);
+    expect(actions(), isNot(contains(ChatMenuAction.moveDown)));
+    expect(
+      actions(InboxSort.oldestActivity),
+      isNot(contains(ChatMenuAction.moveDown)),
+    );
+    expect(actions(InboxSort.unreadFirst), contains(ChatMenuAction.moveDown));
+    await moveInboxRowDown(
+      personal,
+      signal.id,
+      InboxProjection(personal).recordFor(signal).lastActivity!,
+    );
+    expect(actions(), isNot(contains(ChatMenuAction.moveUp)));
+    expect(
+      actions(InboxSort.oldestActivity),
+      isNot(contains(ChatMenuAction.moveUp)),
+    );
+    expect(actions(InboxSort.unreadFirst), contains(ChatMenuAction.moveUp));
+  });
+
   test('Move down: an unread chat sorts among read ones until its next '
       'message, still unread', () async {
     List<String> labels(Room room) => [
@@ -534,12 +560,14 @@ void main() {
         room,
         pinLabel: 'Pin',
         unpinLabel: 'Unpin',
+        sort: InboxSort.unreadFirst,
       ))
         item.label,
     ];
-    List<Room> order() => InboxProjection(
-      personal,
-    ).rooms(client.rooms).where((r) => r != group).toList();
+    List<Room> order() => InboxProjection(personal)
+        .rooms(client.rooms, sort: InboxSort.unreadFirst)
+        .where((r) => r != group)
+        .toList();
     InboxRecord record(Room room) => InboxProjection(personal).recordFor(room);
     // Read chats offer no Move down.
     expect(labels(signal), isNot(contains('Move down')));
@@ -557,9 +585,13 @@ void main() {
       'Ignore chat',
     ]);
     expect(
-      chatMenuItems(personal, signal, pinLabel: 'Pin', unpinLabel: 'Unpin')
-          .singleWhere((i) => i.action == ChatMenuAction.moveDown)
-          .enabled,
+      chatMenuItems(
+        personal,
+        signal,
+        pinLabel: 'Pin',
+        unpinLabel: 'Unpin',
+        sort: InboxSort.unreadFirst,
+      ).singleWhere((i) => i.action == ChatMenuAction.moveDown).enabled,
       isTrue,
     );
 
@@ -605,6 +637,7 @@ void main() {
         room,
         pinLabel: 'Pin',
         unpinLabel: 'Unpin',
+        sort: InboxSort.unreadFirst,
       ))
         item.label,
     ];
@@ -620,9 +653,13 @@ void main() {
     // Without private sync the row stays visible but disabled.
     personal.available = false;
     expect(
-      chatMenuItems(personal, signal, pinLabel: 'Pin', unpinLabel: 'Unpin')
-          .singleWhere((i) => i.action == ChatMenuAction.moveDown)
-          .enabled,
+      chatMenuItems(
+        personal,
+        signal,
+        pinLabel: 'Pin',
+        unpinLabel: 'Unpin',
+        sort: InboxSort.unreadFirst,
+      ).singleWhere((i) => i.action == ChatMenuAction.moveDown).enabled,
       isFalse,
     );
     personal.available = true;
@@ -660,9 +697,10 @@ void main() {
       members: [personal.ref(whatsapp), personal.ref(telegram)],
       defaultRoomId: whatsapp.id,
     ).toJson().cast<String, dynamic>();
-    List<Room> order() => InboxProjection(
-      personal,
-    ).rooms(client.rooms).where((r) => r != group).toList();
+    List<Room> order() => InboxProjection(personal)
+        .rooms(client.rooms, sort: InboxSort.unreadFirst)
+        .where((r) => r != group)
+        .toList();
     telegram.notificationCount = 1;
     expect(order(), [whatsapp, signal]);
     final projection = InboxProjection(personal);
@@ -674,6 +712,7 @@ void main() {
         whatsapp,
         pinLabel: 'Pin',
         unpinLabel: 'Unpin',
+        sort: InboxSort.unreadFirst,
       ).map((i) => i.action),
       contains(ChatMenuAction.moveDown),
     );

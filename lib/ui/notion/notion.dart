@@ -280,14 +280,9 @@ class NotionCompactChatHeader extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
-            Container(
-              width: 1,
-              height: 20,
-              color: Theme.of(context).dividerColor,
-            ),
-            const SizedBox(width: 12),
+            const SizedBox(width: NotionSpace.xxs),
             ExcludeSemantics(child: avatar),
-            const SizedBox(width: 12),
+            const SizedBox(width: NotionSpace.sm),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -298,10 +293,7 @@ class NotionCompactChatHeader extends StatelessWidget {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: context.notion.typography.headline,
                     ),
                   ),
                   ?status,

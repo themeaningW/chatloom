@@ -11,23 +11,39 @@ class MarkdownContextBuilder extends StatelessWidget {
   final EditableTextState editableTextState;
   final TextEditingController controller;
 
+  /// The composer adds media-aware paste without probing the clipboard while
+  /// the toolbar opens. A copied image has no plain string, so Flutter's
+  /// default menu otherwise omits Paste entirely.
+  final VoidCallback? onPaste;
+
   const MarkdownContextBuilder({
     required this.editableTextState,
     required this.controller,
+    this.onPaste,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
     final value = editableTextState.textEditingValue;
-    final selectedText = value.selection.textInside(value.text);
+    final selectedText =
+        value.selection.isValid && value.selection.end <= value.text.length
+        ? value.selection.textInside(value.text)
+        : '';
     final buttonItems = editableTextState.contextMenuButtonItems;
     final l10n = L10n.of(context);
 
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: editableTextState.contextMenuAnchors,
       buttonItems: [
-        ...buttonItems,
+        if (onPaste != null)
+          ContextMenuButtonItem(
+            type: ContextMenuButtonType.paste,
+            onPressed: onPaste,
+          ),
+        ...buttonItems.where(
+          (item) => onPaste == null || item.type != ContextMenuButtonType.paste,
+        ),
         if (selectedText.isNotEmpty) ...[
           ContextMenuButtonItem(
             label: l10n.link,

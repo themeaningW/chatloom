@@ -158,7 +158,7 @@ abstract final class NotionTheme {
     );
     return ThemeData(
       useMaterial3: true,
-      fontFamily: 'Roboto',
+      fontFamily: NotionType.platformFamily,
       brightness: brightness,
       colorScheme: scheme,
       extensions: [
@@ -207,7 +207,7 @@ abstract final class NotionTheme {
         foregroundColor: text,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleTextStyle: t.headline.copyWith(fontFamily: 'Roboto'),
+        titleTextStyle: t.headline,
         iconTheme: IconThemeData(color: text, size: NotionSize.iconMd),
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,

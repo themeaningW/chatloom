@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Real composers, fictional offline rooms. No messages or system clipboard IO.
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/l10n/l10n.dart';
@@ -12,10 +14,12 @@ import 'package:chatloom/personal/merged_chat_page.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/personal/privacy.dart';
 import 'package:chatloom/utils/macos_desktop.dart';
+import 'package:chatloom/utils/markdown_context_builder.dart';
 import 'package:chatloom/widgets/matrix.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:matrix/matrix.dart' show maxPDUSize;
 import 'package:personal_core/personal_core.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,6 +34,20 @@ void main() {
   late int reads;
   late bool restoreAfterRead;
   Completer<void>? readGate;
+  late Directory clipboardImageDirectory;
+  var clipboardImageCount = 0;
+
+  // The package's iOS/macOS/Android image channel returns bytes, whereas its
+  // Windows channel returns the path of a temporary image and deletes it after
+  // reading. Match the real host adapter instead of assuming iOS wire format.
+  Object hostImageResponse(Uint8List bytes) {
+    if (!Platform.isWindows) return bytes;
+    final file = File(
+      '${clipboardImageDirectory.path}/image-${clipboardImageCount++}.png',
+    );
+    file.writeAsBytesSync(bytes);
+    return file.path;
+  }
 
   Future<String> readText() async {
     reads++;
@@ -49,6 +67,10 @@ void main() {
     reads = 0;
     restoreAfterRead = false;
     readGate = null;
+    clipboardImageDirectory = Directory.systemTemp.createTempSync(
+      'chatloom_clipboard_fixture_',
+    );
+    debugReadComposerClipboardImage = null;
     PersonalPrivacy.surfaceUnlocked = true;
     messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'Clipboard.getData') return {'text': await readText()};
@@ -67,6 +89,10 @@ void main() {
     });
   });
   tearDown(() {
+    debugReadComposerClipboardImage = null;
+    if (clipboardImageDirectory.existsSync()) {
+      clipboardImageDirectory.deleteSync(recursive: true);
+    }
     messenger.setMockMethodCallHandler(SystemChannels.platform, null);
     messenger.setMockMethodCallHandler(const MethodChannel('pasteboard'), null);
     messenger.setMockMethodCallHandler(MacDesktopWindow.channel, null);
@@ -113,14 +139,100 @@ void main() {
     );
     messenger.setMockMethodCallHandler(
       const MethodChannel('pasteboard'),
-      (call) async =>
-          call.method == 'files' ? <String>[] : Uint8List.fromList([1, 2, 3]),
+      (call) async => call.method == 'files'
+          ? <String>[]
+          : hostImageResponse(Uint8List.fromList([1, 2, 3])),
     );
     final paste = await readComposerClipboard();
     expect(await paste.media!.single.readAsBytes(), [1, 2, 3]);
     expect(paste.text, isNull);
     expect(reads, 0);
   });
+
+  test(
+    'iOS reads images without requesting an unsupported file clipboard',
+    () async {
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(const MethodChannel('pasteboard'), (
+        call,
+      ) async {
+        calls.add(call.method);
+        if (call.method == 'files') throw MissingPluginException();
+        return hostImageResponse(Uint8List.fromList([0xff, 0xd8, 0xff, 0xe0]));
+      });
+      final paste = await readComposerClipboard(platform: TargetPlatform.iOS);
+      expect(calls, ['image']);
+      expect(paste.media!.single.name, 'pasted-image.jpg');
+      expect(paste.media!.single.mimeType, 'image/jpeg');
+      expect(reads, 0);
+    },
+  );
+
+  test('missing or denied media APIs do not swallow plain text', () async {
+    messenger.setMockMethodCallHandler(const MethodChannel('pasteboard'), (
+      call,
+    ) async {
+      if (call.method == 'files') throw MissingPluginException();
+      throw PlatformException(code: 'clipboard-unavailable');
+    });
+    final paste = await readComposerClipboard(platform: TargetPlatform.windows);
+    expect(paste.text, clipboard);
+    expect(paste.media, isNull);
+    expect(reads, 1);
+  });
+
+  test(
+    'paste insertion clamps an invalid stale selection to the draft end',
+    () {
+      final editor = TextEditingController(text: 'abc');
+      editor.value = const TextEditingValue(
+        text: 'abc',
+        selection: TextSelection.collapsed(offset: 7),
+      );
+      expect(insertComposerText(editor, 'x'), 'abcx');
+      expect(editor.selection.baseOffset, 4);
+      editor.dispose();
+    },
+  );
+
+  test(
+    'paste replacement uses the editor limit without splitting emoji graphemes',
+    () async {
+      final previous = AppSettings.textMessageMaxLength.value;
+      addTearDown(() => AppSettings.textMessageMaxLength.setItem(previous));
+      await AppSettings.textMessageMaxLength.setItem(5);
+      final editor = TextEditingController();
+      addTearDown(editor.dispose);
+      editor.value = const TextEditingValue(
+        text: 'ABCD',
+        selection: TextSelection(baseOffset: 1, extentOffset: 3),
+      );
+      const family = '👨‍👩‍👧‍👦';
+      const expected = 'A$familyéxy';
+      expect(insertComposerText(editor, '$familyéxyz'), expected);
+      expect(
+        editor.selection,
+        TextSelection.collapsed(offset: expected.length),
+      );
+    },
+  );
+
+  test(
+    'paste retains the protocol limit when the display limit is larger',
+    () async {
+      final previous = AppSettings.textMessageMaxLength.value;
+      addTearDown(() => AppSettings.textMessageMaxLength.setItem(previous));
+      await AppSettings.textMessageMaxLength.setItem(maxPDUSize);
+      final editor = TextEditingController();
+      addTearDown(editor.dispose);
+      final wireLimit = (maxPDUSize / 3).floor();
+      expect(
+        insertComposerText(editor, 'x' * (wireLimit + 10)),
+        'x' * wireLimit,
+      );
+      expect(editor.selection.baseOffset, wireLimit);
+    },
+  );
 
   for (final merged in [false, true]) {
     group(merged ? 'merged composer' : 'ordinary composer', () {
@@ -207,6 +319,27 @@ void main() {
         await unmount(tester);
       });
 
+      testWidgets(
+        'native paste respects the configured limit when replacing a selection',
+        (tester) async {
+          final previous = AppSettings.textMessageMaxLength.value;
+          addTearDown(() => AppSettings.textMessageMaxLength.setItem(previous));
+          await AppSettings.textMessageMaxLength.setItem(6);
+          final field = await mount(tester);
+          field.controller!.value = const TextEditingValue(
+            text: 'ABCD',
+            selection: TextSelection(baseOffset: 1, extentOffset: 3),
+          );
+          clipboard = '12345678';
+          await paste(tester);
+          expect(field.controller!.text, 'A12345');
+          expect(field.controller!.selection.baseOffset, 6);
+          expect(personal.sends, isEmpty);
+          expect(find.byType(SendFileDialog), findsNothing);
+          await unmount(tester);
+        },
+      );
+
       testWidgets('an active composition does not discard pasted text', (
         tester,
       ) async {
@@ -273,6 +406,134 @@ void main() {
         expect(field.controller!.text, 'New draft');
         await unmount(tester);
       });
+
+      testWidgets('empty clipboard never deletes the selected draft', (
+        tester,
+      ) async {
+        final field = await mount(tester);
+        field.controller!.value = const TextEditingValue(
+          text: 'Keep this text',
+          selection: TextSelection(baseOffset: 0, extentOffset: 14),
+        );
+        clipboard = '';
+        await paste(tester);
+        expect(field.controller!.text, 'Keep this text');
+        expect(personal.sends, isEmpty);
+        await unmount(tester);
+      });
+
+      testWidgets(
+        'finishing composition while paste is pending keeps the paste',
+        (tester) async {
+          final field = await mount(tester);
+          field.controller!.value = const TextEditingValue(
+            text: 'abc',
+            selection: TextSelection.collapsed(offset: 3),
+            composing: TextRange(start: 0, end: 3),
+          );
+          final gate = readGate = Completer<void>();
+          await paste(tester);
+          field.controller!.value = field.controller!.value.copyWith(
+            composing: TextRange.empty,
+          );
+          gate.complete();
+          await tester.pump();
+          expect(field.controller!.text, 'abc$clipboard');
+          expect(personal.sends, isEmpty);
+          await unmount(tester);
+        },
+      );
+
+      testWidgets(
+        'native toolbar offers image-only Paste and opens a preview without sending',
+        (tester) async {
+          final field = await mount(tester);
+          var imageReads = 0;
+          messenger.setMockMethodCallHandler(SystemChannels.platform, (
+            call,
+          ) async {
+            if (call.method == 'Clipboard.hasStrings') return {'value': false};
+            if (call.method == 'Clipboard.getData') return null;
+            return null;
+          });
+          messenger.setMockMethodCallHandler(
+            const MethodChannel('pasteboard'),
+            (call) async {
+              if (call.method == 'files') return <String>[];
+              throw StateError(
+                'The widget fixture must not call the host image adapter',
+              );
+            },
+          );
+          debugReadComposerClipboardImage = () async {
+            imageReads++;
+            return base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+            );
+          };
+          final editableFinder = find.descendant(
+            of: find.byType(InputBar),
+            matching: find.byType(EditableText),
+          );
+          final editable = tester.state<EditableTextState>(editableFinder);
+          final toolbar =
+              field.contextMenuBuilder!(
+                    tester.element(editableFinder),
+                    editable,
+                  )
+                  as MarkdownContextBuilder;
+          expect(toolbar.onPaste, isNotNull);
+          expect(
+            imageReads,
+            0,
+            reason: 'opening a menu never reads private clipboard content',
+          );
+          toolbar.onPaste!();
+          await tester.pumpAndSettle();
+          expect(imageReads, 1);
+          expect(find.byType(SendFileDialog), findsOneWidget);
+          expect(
+            personal.sends,
+            isEmpty,
+            reason: 'paste is not permission to send',
+          );
+          await unmount(tester);
+        },
+      );
+
+      testWidgets(
+        'keyboard image insertion stages attachment instead of immediately sending',
+        (tester) async {
+          final field = await mount(tester);
+          field.contentInsertionConfiguration!.onContentInserted(
+            KeyboardInsertedContent(
+              mimeType: 'image/png',
+              uri: 'content://fictional/pasted.png',
+              data: base64Decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(find.byType(SendFileDialog), findsOneWidget);
+          expect(personal.sends, isEmpty);
+          await unmount(tester);
+        },
+      );
+
+      testWidgets(
+        'leaving the conversation cancels an outstanding text paste',
+        (tester) async {
+          await mount(tester);
+          final gate = readGate = Completer<void>();
+          await paste(tester);
+          await unmount(tester);
+          gate.complete();
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+          expect(personal.sends, isEmpty);
+        },
+      );
 
       testWidgets('lock and unlock invalidate an outstanding paste', (
         tester,

@@ -98,15 +98,15 @@ class NotionInboxRow extends StatelessWidget {
     final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
     final colors = context.notion.colors;
     final hasUnread = unreadCount > 0 || unread;
-    // Unread: tinted row, bold name, brighter preview, accent badge; muted chats keep a
-    // grey badge so they do not compete with chats that notify.
+    // Read state is communicated by weight and a compact badge. Keep the list
+    // neutral so several unread chats do not become competing blue cards.
     final palette = context.notion.palette;
     final rowColor = selected
         ? colors.selected
         : hasUnread && !muted && display.inboxUnreadHighlight
-        ? palette.accentTint
+        ? colors.surface
         : colors.background;
-    final unreadInk = NotionContrast.readable(rowColor, colors.accent);
+    final unreadInk = NotionContrast.readable(rowColor, colors.text);
     final badgeColor = muted ? colors.selected : palette.accentFill;
     final badgeText = muted ? colors.textSecondary : palette.onAccentFill;
     final announcement = [
@@ -126,11 +126,7 @@ class NotionInboxRow extends StatelessWidget {
       ?tag,
       ?notionNetworksAnnouncement(networks),
     ];
-    final previewColor = typing
-        ? colors.accent
-        : hasUnread && !muted && !draft && !redacted
-        ? colors.text
-        : secondary;
+    final previewColor = typing ? colors.accent : secondary;
     return Semantics(
       button: true,
       selected: selected,
@@ -150,7 +146,7 @@ class NotionInboxRow extends StatelessWidget {
             color: colors.selected,
             restColor:
                 hasUnread && !muted && !selected && display.inboxUnreadHighlight
-                ? palette.accentTint
+                ? colors.surface
                 : null,
             child: Material(
               type: MaterialType.transparency,
@@ -163,12 +159,12 @@ class NotionInboxRow extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: NotionSpace.xs,
-                    vertical: NotionSpace.lg * scale,
+                    vertical: NotionSpace.sm * scale,
                   ),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
                       minHeight:
-                          NotionSize.touchTarget - 2 * NotionSpace.lg * scale,
+                          NotionSize.touchTarget - 2 * NotionSpace.sm * scale,
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,14 +172,24 @@ class NotionInboxRow extends StatelessWidget {
                         if (display.inboxAvatars)
                           ExcludeSemantics(
                             child: SizedBox.square(
-                              dimension: NotionSize.avatarLg * scale,
+                              dimension:
+                                  (NotionSize.avatarLg + NotionSpace.xs) *
+                                  scale,
                               // One shape with or without the badge, so the
                               // avatar keeps its element when the network
                               // filter changes (no image reload).
                               child: Stack(
                                 clipBehavior: Clip.none,
                                 children: [
-                                  Positioned.fill(child: avatar),
+                                  Positioned.fill(
+                                    // The contact name below is the accessible
+                                    // label. Decorative initials must stay
+                                    // inside their fixed avatar at large text.
+                                    child: MediaQuery.withClampedTextScaling(
+                                      maxScaleFactor: 1,
+                                      child: avatar,
+                                    ),
+                                  ),
                                   if (networks.isNotEmpty &&
                                       display.inboxNetworkBadges)
                                     PositionedDirectional(
@@ -211,7 +217,10 @@ class NotionInboxRow extends StatelessWidget {
                                         name,
                                         maxLines: large ? 2 : 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: NotionType.headline
+                                        style: context
+                                            .notion
+                                            .typography
+                                            .headline
                                             .apply(
                                               fontSizeFactor: (1 + scale) / 2,
                                             )
@@ -221,7 +230,7 @@ class NotionInboxRow extends StatelessWidget {
                                                   ? unreadInk
                                                   : colors.text,
                                               fontWeight: hasUnread
-                                                  ? FontWeight.w700
+                                                  ? FontWeight.w600
                                                   : FontWeight.w500,
                                             ),
                                       ),
@@ -304,7 +313,10 @@ class NotionInboxRow extends StatelessWidget {
                                                 ? 2
                                                 : display.inboxPreviewLines,
                                             overflow: TextOverflow.ellipsis,
-                                            style: NotionType.callout
+                                            style: context
+                                                .notion
+                                                .typography
+                                                .callout
                                                 .apply(
                                                   fontSizeFactor:
                                                       (1 + scale) / 2,
@@ -355,14 +367,16 @@ class NotionInboxRow extends StatelessWidget {
                                       child: Text(
                                         time!,
                                         key: ValueKey(time),
-                                        style: NotionType.footnote.copyWith(
-                                          color: hasUnread && !muted
-                                              ? unreadInk
-                                              : secondary,
-                                          fontWeight: hasUnread
-                                              ? FontWeight.w600
-                                              : FontWeight.w400,
-                                        ),
+                                        style: context
+                                            .notion
+                                            .typography
+                                            .footnote
+                                            .copyWith(
+                                              color: secondary,
+                                              fontWeight: hasUnread
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w400,
+                                            ),
                                       ),
                                     ),
                                   ],
@@ -416,7 +430,10 @@ class NotionInboxRow extends StatelessWidget {
                                                 alignment: Alignment.center,
                                                 child: NotionAnimatedCount(
                                                   count: unreadCount,
-                                                  style: NotionType.caption
+                                                  style: context
+                                                      .notion
+                                                      .typography
+                                                      .caption
                                                       .copyWith(
                                                         color: badgeText,
                                                         fontWeight:
@@ -540,7 +557,7 @@ class _MentionBadge extends StatelessWidget {
     decoration: BoxDecoration(color: color, borderRadius: NotionRadius.pillAll),
     child: Text(
       '@',
-      style: NotionType.caption.copyWith(
+      style: context.notion.typography.caption.copyWith(
         color: text,
         fontWeight: FontWeight.w700,
       ),

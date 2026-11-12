@@ -1,5 +1,21 @@
 # Notion dark v2 design system
 
+## Apple-inspired readability pass (2026-11)
+
+The user-authorized beta replaces the production floating inbox dock and
+full-width accent unread cards with a solid header, visible search, neutral
+conversation rows and restrained unread indicators. Keep the existing tokens
+and adaptive shared Flutter UI; do not fork feature implementations for iOS.
+The system text face is used on iOS/macOS with bundled Roboto fallback on other
+hosts. Reading text is 17 logical pixels, page titles 34, and controls retain
+48-pixel hit targets. Respect system text scaling and reduced motion.
+
+Settings uses grouped surfaces with inset separators, clear chevrons and a
+larger account avatar. The conversation header drops decorative dividers.
+Glass is optional settled chrome, not a requirement to blur every surface.
+This section supersedes the older floating-dock and accent-unread styling
+requirements below. Do not add blur or animation to scrolling rows.
+
 ## Media resource controls
 
 The existing voice/round settings page contains Data saver and Storage &

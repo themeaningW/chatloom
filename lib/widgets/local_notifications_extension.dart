@@ -6,9 +6,11 @@
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/personal/diagnostics.dart';
 import 'package:chatloom/personal/inbox_projection.dart';
+import 'package:chatloom/personal/ios_local_notifications.dart';
 import 'package:chatloom/personal/message_notification.dart';
 import 'package:chatloom/personal/message_preview.dart';
 import 'package:chatloom/personal/notification_eligibility.dart';
+import 'package:chatloom/personal/notification_presentation_guard.dart';
 import 'package:chatloom/personal/own_sender.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/personal/privacy.dart';
@@ -31,6 +33,16 @@ extension LocalNotificationsExtension on MatrixState {
 
   Future<void> showLocalNotification(Event event) async {
     if (!PlatformInfos.supportsSystemNotifications) return;
+    final client = event.room.client;
+    final guard = NotificationPresentationGuard(
+      event,
+      ownerCurrent: () => mounted && widget.clients.contains(client),
+    );
+    if (!guard.current) return;
+    if (PlatformInfos.isIOS) {
+      await IosLocalNotifications.instance.initialize();
+      if (!guard.current) return;
+    }
     if (isTelegramMediaControl(event.type)) return;
     if (PersonalPrivacy.isJournal(event.room)) {
       // Same presenter, claim and trust checks as the background paths.
@@ -42,7 +54,6 @@ extension LocalNotificationsExtension on MatrixState {
       }
       return;
     }
-    final client = event.room.client;
     if (event.senderId == client.userID ||
         OwnSenderResolver.of(client).isStronglyOwnEvent(event)) {
       return;
@@ -51,6 +62,7 @@ extension LocalNotificationsExtension on MatrixState {
     try {
       // Eligibility needs local private metadata only, never the journal.
       await personal.loadLocal();
+      if (!guard.current) return;
     } catch (_) {
       if (!kIsWeb) return;
     }
@@ -68,7 +80,7 @@ extension LocalNotificationsExtension on MatrixState {
       return;
     }
 
-    if (!mounted) return;
+    if (!guard.current) return;
     final roomId = event.room.id;
     if (activeRoomId == roomId) {
       if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
@@ -78,6 +90,7 @@ extension LocalNotificationsExtension on MatrixState {
 
     // The app lock hides names and previews even when previews are on.
     final locked = await personalAppLockConfigured();
+    if (!guard.current) return;
     final previews = !locked && AppSettings.personalNotificationPreviews.value;
     final available = previews && notificationContentAvailable(event);
     final text = messageNotificationText(
@@ -90,7 +103,7 @@ extension LocalNotificationsExtension on MatrixState {
     );
     final title = text.title;
     final body = text.body;
-    if (!mounted) return;
+    if (!guard.current) return;
     if (kIsWeb) {
       if (AppSettings.webNotificationSound.value) _audioPlayer.play();
 
@@ -103,6 +116,9 @@ extension LocalNotificationsExtension on MatrixState {
       title: title,
       body: body,
       notificationDetails: NotificationDetails(
+        iOS: DarwinNotificationDetails(
+          threadIdentifier: '${client.clientName}_${event.room.id}',
+        ),
         macOS: DarwinNotificationDetails(
           threadIdentifier: '${client.clientName}_${event.room.id}',
         ),

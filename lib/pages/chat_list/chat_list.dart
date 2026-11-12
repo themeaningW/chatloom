@@ -85,6 +85,7 @@ List<ChatMenuItem<ChatMenuAction>> chatMenuItems(
   Room room, {
   required String pinLabel,
   required String unpinLabel,
+  InboxSort sort = InboxSort.latestActivity,
 }) {
   final projection = InboxProjection(owner);
   final entity = projection.entityFor(room);
@@ -96,9 +97,11 @@ List<ChatMenuItem<ChatMenuAction>> chatMenuItems(
   final aside = projection.placementFor(room) == ChatPlacement.aside;
   final unread = inboxSources(owner, room).any(personalRoomUnread);
   final canWrite = joined && canEditChatPreferences(owner, 'org:$entity');
-  // Only a chat the unread rule raises (unread, unmuted, unpinned) can move
+  // Only the explicit unread-first order raises chats; its unread, unmuted,
+  // unpinned rows can move
   // down; a moved one offers to move back up until its next message.
-  final movable = unread && !pinned && !metadata.muted;
+  final movable =
+      sort == InboxSort.unreadFirst && unread && !pinned && !metadata.muted;
   final movedDown = movable && projection.recordFor(room).movedDown;
   return [
     unread
@@ -499,6 +502,17 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
   Object? _selectionKey;
   List<Room> _selection = const [];
 
+  InboxSort get inboxSort => InboxSort.values.firstWhere(
+    (sort) => sort.name == AppSettings.inboxSort.value,
+    orElse: () => InboxSort.latestActivity,
+  );
+
+  Future<void> setInboxSort(InboxSort sort) async {
+    if (sort == inboxSort) return;
+    await AppSettings.inboxSort.setItem(sort.name);
+    if (mounted) setState(() {});
+  }
+
   /// Visible rooms for the current view, search, network settings.
   /// Selection runs over cached records and is memoised until the inbox or
   /// one of the inputs changes.
@@ -512,12 +526,13 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
       personalLabel,
       activeFilter,
       network,
+      inboxSort,
     );
     if (key == _selectionKey) return _selection;
     final index = inbox.index;
     final roomFilter = getRoomFilterByActiveFilter(activeFilter);
     _selection = inbox.projection
-        .select(index, filter: personalFilter)
+        .select(index, filter: personalFilter, sort: inboxSort)
         .where(roomFilter)
         .where(
           (room) =>
@@ -801,6 +816,7 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
           room,
           pinLabel: l10n.pin,
           unpinLabel: l10n.unpin,
+          sort: inboxSort,
         ),
       ],
     );
@@ -1143,7 +1159,10 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
     // Move down/up applies only where the unread rule raises the row; the
     // shown record says whether it is moved down (no per-row recompute).
     final movable =
-        !pinned && !metadata.muted && sources.any(personalRoomUnread);
+        inboxSort == InboxSort.unreadFirst &&
+        !pinned &&
+        !metadata.muted &&
+        sources.any(personalRoomUnread);
     final movedDown =
         movable && (inbox.index.recordFor(room)?.movedDown ?? false);
     void commit(ChatMenuAction action, String refused) {
@@ -1153,6 +1172,7 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
         room,
         pinLabel: '',
         unpinLabel: '',
+        sort: inboxSort,
       ).firstWhereOrNull((item) => item.action == action);
       if (item == null || !item.enabled) {
         ScaffoldMessenger.of(context)

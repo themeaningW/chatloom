@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import 'package:chatloom/personal/ui/notion_inbox_dock.dart';
 import 'package:chatloom/personal/ui/notion_inbox_pins.dart';
 import 'package:chatloom/personal/ui/notion_inbox_view_chips.dart';
+import 'package:chatloom/personal/ui/notion_network_filter.dart';
+import 'package:chatloom/personal/ui/notion_network_selector.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:personal_core/personal_core.dart';
@@ -36,6 +37,8 @@ class NotionInboxPage extends StatelessWidget {
 
   /// "Mark all as read" in the dock's "Show chats" menu (FX-17).
   final VoidCallback? onMarkAllRead;
+  final InboxSort sort;
+  final ValueChanged<InboxSort>? onSortSelected;
 
   /// New order of the pin keys after a drag (FX-17); null: pins stay put.
   final Future<void> Function(List<String> keys)? onReorderPins;
@@ -72,6 +75,8 @@ class NotionInboxPage extends StatelessWidget {
     this.onViewSelected,
     this.onManageNetworks,
     this.onMarkAllRead,
+    this.sort = InboxSort.latestActivity,
+    this.onSortSelected,
     this.onReorderPins,
     this.scrollController,
     this.status,
@@ -97,22 +102,19 @@ class NotionInboxPage extends StatelessWidget {
         : rowBuilder == null
         ? rows.length
         : rowCount ?? 0;
-    final dockClearance =
-        safe.bottom +
-        notionInboxDockHeight(MediaQuery.textScalerOf(context)) +
-        36;
+    final bottomClearance = safe.bottom + NotionSpace.xl;
     final showPins = !unavailable && pins.isNotEmpty;
     final emptyText =
         emptyMessage ??
         (selectedView == InboxFilter.aside
             ? 'No chats in Aside. Hold a chat and choose Move to Aside.'
             : 'No chats yet. Use Search to find people.');
-    // One backdrop read for the glass header and dock (DESIGN.md "Glass").
+    // Stable solid chrome keeps the inbox readable and leaves every last row
+    // unobscured; the network selector uses the shared anchored popup.
     return BackdropGroup(
       child: Scaffold(
-        // Register the dock with Scaffold geometry so every snackbar clears it.
-        // extendBody keeps the conversation list visible through the glass.
-        extendBody: true,
+        // No floating navigation covers the last conversation or a snackbar.
+        extendBody: false,
         // The first screenful of pins and rows rises in once per page; rows
         // built later by scrolling or filtering appear as they are.
         body: NotionEntranceScope(
@@ -131,28 +133,39 @@ class NotionInboxPage extends StatelessWidget {
               controller: scrollController,
               slivers: [
                 PinnedHeaderSliver(
-                  child: NotionGlassBar(
+                  child: ColoredBox(
+                    color: context.notion.colors.background,
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
                         NotionSpace.inset,
                         safe.top + NotionSpace.xs,
                         NotionSpace.inset,
-                        NotionSpace.xxs,
+                        NotionSpace.xs,
                       ),
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // New chats start from Search (dock), like Telegram
-                          // and Messenger; the title keeps the touch-row height.
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              minHeight: NotionSize.touchTarget,
-                            ),
-                            child: Align(
-                              alignment: AlignmentDirectional.centerStart,
-                              child: Text('Chats', style: NotionTokens.title),
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Chats',
+                                  style: context.notion.typography.title,
+                                ),
+                              ),
+                              _InboxToolbarButton(
+                                key: const ValueKey('notion_dock_settings'),
+                                label: 'Settings',
+                                icon: Icons.settings_outlined,
+                                onPressed: onSettings,
+                              ),
+                              _InboxToolbarButton(
+                                key: const ValueKey('inbox_new_message'),
+                                label: 'New message',
+                                icon: Icons.edit_square,
+                                onPressed: unavailable ? null : onSearch,
+                              ),
+                            ],
                           ),
                           _RetainedReveal(
                             revealOnMount: false,
@@ -163,9 +176,76 @@ class NotionInboxPage extends StatelessWidget {
                     ),
                   ),
                 ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    NotionSpace.inset,
+                    NotionSpace.xxs,
+                    NotionSpace.inset,
+                    NotionSpace.sm,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: _InboxSearchButton(
+                      onPressed: unavailable ? null : onSearch,
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: NotionSpace.page,
+                  sliver: SliverToBoxAdapter(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _InboxNetworkPicker(
+                            networks: networks,
+                            selectedNetwork: selectedNetwork,
+                            selectedView: selectedView,
+                            onNetworkSelected: onNetworkSelected,
+                            onViewSelected: onViewSelected,
+                            onManageNetworks: onManageNetworks,
+                            onMarkAllRead: unavailable ? null : onMarkAllRead,
+                          ),
+                        ),
+                        if (onSortSelected != null)
+                          _InboxToolbarButton(
+                            key: const ValueKey('inbox_sort'),
+                            label: 'Sort chats',
+                            icon: Icons.sort,
+                            onPressed: () async {
+                              final choice = await showNotionChoiceSheet<InboxSort>(
+                                context,
+                                title: 'Sort chats',
+                                selected: sort,
+                                options: const [
+                                  NotionChoice(
+                                    InboxSort.latestActivity,
+                                    'Latest activity',
+                                    subtitle: 'Newest changes first',
+                                  ),
+                                  NotionChoice(
+                                    InboxSort.oldestActivity,
+                                    'Oldest activity',
+                                    subtitle: 'Oldest changes first',
+                                  ),
+                                  NotionChoice(
+                                    InboxSort.unreadFirst,
+                                    'Unread first',
+                                    subtitle:
+                                        'Unread chats first, then latest activity',
+                                  ),
+                                ],
+                              );
+                              if (choice != null && choice.value != sort) {
+                                onSortSelected?.call(choice.value);
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
                 if (status != null)
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: NotionSpace.page,
                     sliver: SliverToBoxAdapter(child: status),
                   ),
                 // Pins grow in and out instead of jumping.
@@ -174,7 +254,12 @@ class NotionInboxPage extends StatelessWidget {
                     revealOnMount: false,
                     child: showPins
                         ? Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                            padding: const EdgeInsets.fromLTRB(
+                              NotionSpace.inset,
+                              NotionSpace.sm,
+                              NotionSpace.inset,
+                              0,
+                            ),
                             child: NotionEntrance(
                               rise: NotionMotion.riseList,
                               child: NotionPinnedShortcuts(
@@ -206,7 +291,7 @@ class NotionInboxPage extends StatelessWidget {
                 ),
                 if (loading)
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: NotionSpace.page,
                     sliver: SliverToBoxAdapter(
                       child: Semantics(
                         label: 'Loading chats',
@@ -248,7 +333,12 @@ class NotionInboxPage extends StatelessWidget {
                 _SliverFadeOnChange(
                   signal: (selectedView, selectedNetwork, loading),
                   sliver: SliverPadding(
-                    padding: EdgeInsets.fromLTRB(20, 0, 20, dockClearance),
+                    padding: EdgeInsets.fromLTRB(
+                      NotionSpace.inset,
+                      0,
+                      NotionSpace.inset,
+                      bottomClearance,
+                    ),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
@@ -263,10 +353,28 @@ class NotionInboxPage extends StatelessWidget {
                             // include it and highlights never touch.
                             child: Padding(
                               padding: NotionSpace.listItem,
-                              child: NotionEntrance(
-                                playKey: row.key,
-                                rise: NotionMotion.riseList,
-                                child: row,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  NotionEntrance(
+                                    playKey: row.key,
+                                    rise: NotionMotion.riseList,
+                                    child: row,
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsetsDirectional.only(
+                                      start:
+                                          NotionSize.avatarLg +
+                                          NotionSpace.xs +
+                                          NotionSpace.sm,
+                                    ),
+                                    child: Divider(
+                                      height: 1,
+                                      thickness: .5,
+                                      color: context.notion.colors.border,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           );
@@ -285,25 +393,6 @@ class NotionInboxPage extends StatelessWidget {
             ),
           ),
         ),
-        bottomNavigationBar: Padding(
-          padding: EdgeInsets.fromLTRB(
-            NotionSpace.md,
-            0,
-            NotionSpace.md,
-            safe.bottom + NotionSpace.sm,
-          ),
-          child: NotionInboxDock(
-            onSettings: onSettings,
-            onSearch: unavailable ? null : onSearch,
-            onNetworkSelected: onNetworkSelected,
-            networks: networks,
-            selectedNetwork: selectedNetwork,
-            selectedView: selectedView,
-            onViewSelected: onViewSelected,
-            onManageNetworks: onManageNetworks,
-            onMarkAllRead: unavailable ? null : onMarkAllRead,
-          ),
-        ),
       ),
     );
   }
@@ -311,6 +400,175 @@ class NotionInboxPage extends StatelessWidget {
 
 /// Placeholder rows while the first inbox load runs (about one screenful).
 const _skeletonRows = 8;
+
+class _InboxToolbarButton extends StatelessWidget {
+  const _InboxToolbarButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    this.onPressed,
+  });
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: NotionSize.touchTarget,
+    child: IconButton(
+      tooltip: label,
+      onPressed: onPressed,
+      icon: Icon(icon, size: NotionSize.iconMd),
+      color: context.notion.colors.accent,
+    ),
+  );
+}
+
+/// A real button rather than a fake text field: activates the existing search
+/// route, where users can search chats, messages and start a conversation.
+class _InboxSearchButton extends StatelessWidget {
+  const _InboxSearchButton({required this.onPressed});
+  final VoidCallback? onPressed;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    key: const ValueKey('notion_dock_search'),
+    button: true,
+    enabled: onPressed != null,
+    label: 'Search chats and messages',
+    child: Material(
+      color: context.notion.colors.surface,
+      borderRadius: NotionRadius.smAll,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: NotionRadius.smAll,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: NotionSize.touchTarget),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: NotionSpace.sm,
+              vertical: NotionSpace.xs,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.search,
+                  size: NotionSize.iconMd,
+                  color: context.notion.colors.textSecondary,
+                ),
+                const SizedBox(width: NotionSpace.xs),
+                Expanded(
+                  child: Text(
+                    'Search',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: context.notion.typography.body.copyWith(
+                      color: context.notion.colors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _InboxNetworkPicker extends StatefulWidget {
+  const _InboxNetworkPicker({
+    required this.networks,
+    required this.onNetworkSelected,
+    required this.selectedView,
+    this.selectedNetwork,
+    this.onViewSelected,
+    this.onManageNetworks,
+    this.onMarkAllRead,
+  });
+  final List<String> networks;
+  final String? selectedNetwork;
+  final InboxFilter selectedView;
+  final ValueChanged<String?> onNetworkSelected;
+  final ValueChanged<InboxFilter>? onViewSelected;
+  final VoidCallback? onManageNetworks;
+  final VoidCallback? onMarkAllRead;
+  @override
+  State<_InboxNetworkPicker> createState() => _InboxNetworkPickerState();
+}
+
+class _InboxNetworkPickerState extends State<_InboxNetworkPicker> {
+  final _anchor = GlobalKey();
+  bool _expanded = false;
+  Future<void> _show() async {
+    final box = _anchor.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || _expanded) return;
+    setState(() => _expanded = true);
+    try {
+      await showNotionNetworkSelector(
+        context,
+        anchor: box.localToGlobal(Offset.zero) & box.size,
+        networks: widget.networks,
+        selected: widget.selectedNetwork,
+        onSelected: widget.onNetworkSelected,
+        selectedView: widget.selectedView,
+        onViewSelected: widget.onViewSelected,
+        onManageNetworks: widget.onManageNetworks,
+        onMarkAllRead: widget.onMarkAllRead,
+      );
+    } finally {
+      if (mounted) setState(() => _expanded = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = widget.selectedNetwork == null
+        ? 'All networks'
+        : notionNetworkLabel(widget.selectedNetwork!);
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Semantics(
+        key: const ValueKey('notion_dock_network'),
+        button: true,
+        expanded: _expanded,
+        label: 'Show chats, $label',
+        child: InkWell(
+          key: _anchor,
+          onTap: _show,
+          borderRadius: NotionRadius.smAll,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: NotionSize.touchTarget,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: NotionSpace.xs),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.notion.typography.callout.copyWith(
+                        color: context.notion.colors.accent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: NotionSpace.xxs),
+                  Icon(
+                    Icons.expand_more,
+                    size: NotionSize.iconMd,
+                    color: context.notion.colors.accent,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// Keeps showing the last non-null [child] while it collapses, so a section
 /// that goes away (pins, the header status) shrinks out instead of vanishing.

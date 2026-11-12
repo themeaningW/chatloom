@@ -10,6 +10,7 @@ import 'package:chatloom/l10n/l10n.dart';
 import 'package:chatloom/pages/chat/events/round_mini_player.dart';
 import 'package:chatloom/personal/beeper_mute.dart';
 import 'package:chatloom/personal/conversation_shortcuts.dart';
+import 'package:chatloom/personal/ios_local_notifications.dart';
 import 'package:chatloom/personal/kept_message_notification.dart';
 import 'package:chatloom/personal/kept_messages.dart';
 import 'package:chatloom/personal/media/media_access.dart';
@@ -517,8 +518,26 @@ class MatrixState extends State<Matrix> {
       BeeperMuteRelease.startFor(c);
     }
 
-    if (PlatformInfos.isWeb || PlatformInfos.isDesktop) {
-      if (PlatformInfos.supportsSystemNotifications) {
+    if (PlatformInfos.isWeb || PlatformInfos.isDesktop || PlatformInfos.isIOS) {
+      if (PlatformInfos.isIOS) {
+        unawaited(
+          IosLocalNotifications.instance
+              .initialize(
+                onResponse: (response) {
+                  if (!mounted) return;
+                  unawaited(
+                    notificationTap(
+                      response,
+                      clients: widget.clients,
+                      router: ChatLoomApp.router,
+                      l10n: null,
+                    ).catchError((Object _) {}),
+                  );
+                },
+              )
+              .catchError((Object _) {}),
+        );
+      } else if (PlatformInfos.supportsSystemNotifications) {
         FlutterLocalNotificationsPlugin().initialize(
           settings: InitializationSettings(
             linux: LinuxInitializationSettings(

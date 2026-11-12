@@ -323,7 +323,15 @@ class _NotionPinnedShortcutsState extends State<NotionPinnedShortcuts> {
         : byKey.keys.toSet().difference(known);
     _known = byKey.keys.toSet();
 
-    final labelStyle = NotionType.caption.copyWith(fontWeight: FontWeight.w500);
+    final labelStyle = context.notion.typography.caption.copyWith(
+      fontWeight: FontWeight.w500,
+    );
+    final labelScale =
+        MediaQuery.textScalerOf(context).scale(labelStyle.fontSize!) /
+        labelStyle.fontSize!;
+    // Accessibility-sized labels need wider cells, not more vertical rows.
+    // Keep one horizontally scrollable rail so conversations remain nearby.
+    final accessibleRail = labelScale > 1.3;
     final measure = TextPainter(
       text: TextSpan(text: 'Ag', style: labelStyle),
       textScaler: MediaQuery.textScalerOf(context),
@@ -344,8 +352,15 @@ class _NotionPinnedShortcutsState extends State<NotionPinnedShortcuts> {
         LayoutBuilder(
           builder: (context, constraints) {
             final grid = _grid = _Grid(
-              width: constraints.maxWidth,
-              columns: notionPinnedColumns(constraints.maxWidth),
+              width: accessibleRail
+                  ? math.max(
+                      constraints.maxWidth,
+                      _minCell * labelScale * ordered.length,
+                    )
+                  : constraints.maxWidth,
+              columns: accessibleRail
+                  ? ordered.length
+                  : notionPinnedColumns(constraints.maxWidth),
               cellHeight: cellHeight,
               count: ordered.length,
               rtl: rtl,
@@ -422,7 +437,7 @@ class _NotionPinnedShortcutsState extends State<NotionPinnedShortcuts> {
             }
 
             final lifted = active == null ? null : byKey[active.key];
-            return Listener(
+            final content = Listener(
               // A cancelled pointer (system gesture, app switch) never
               // leaves a bubble in the air.
               onPointerCancel: (_) => _cancel(),
@@ -440,6 +455,13 @@ class _NotionPinnedShortcutsState extends State<NotionPinnedShortcuts> {
                   ],
                 ),
               ),
+            );
+            if (!accessibleRail) return content;
+            return SingleChildScrollView(
+              key: const PageStorageKey('inbox-pins-accessibility-rail'),
+              scrollDirection: Axis.horizontal,
+              primary: false,
+              child: content,
             );
           },
         ),
@@ -675,7 +697,12 @@ class _PinnedBubble extends StatelessWidget {
                           Center(
                             child: SizedBox.square(
                               dimension: notionPinnedAvatarSize,
-                              child: pin.avatar,
+                              // Initials are a decorative avatar, not a second
+                              // accessible label; keep them inside the circle.
+                              child: MediaQuery.withClampedTextScaling(
+                                maxScaleFactor: 1,
+                                child: pin.avatar,
+                              ),
                             ),
                           ),
                           if (pin.networks.isNotEmpty)

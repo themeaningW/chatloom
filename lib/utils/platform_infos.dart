@@ -30,7 +30,7 @@ abstract class PlatformInfos {
 
   /// iOS background delivery and notification setup require a separate port.
   /// The private macOS client intentionally runs without system notifications.
-  static bool get supportsSystemNotifications => !isMacOS && !isIOS;
+  static bool get supportsSystemNotifications => !isMacOS;
 
   /// The first iOS runner has no share extension or SwiftPM sharing plugin.
   static bool get supportsIncomingShares => isAndroid;

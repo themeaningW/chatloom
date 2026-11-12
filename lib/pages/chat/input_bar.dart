@@ -6,14 +6,10 @@
 import 'package:chatloom/config/app_config.dart';
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/l10n/l10n.dart';
-import 'package:chatloom/pages/chat/trust_user_key_dialog.dart';
 import 'package:chatloom/personal/inbox_projection.dart';
-import 'package:chatloom/personal/media/media_quality.dart';
-import 'package:chatloom/personal/media/outgoing_media.dart';
 import 'package:chatloom/personal/mention_suggestions.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/utils/markdown_context_builder.dart';
-import 'package:chatloom/utils/matrix_sdk_extensions/matrix_file_extension.dart';
 import 'package:chatloom/widgets/mxc_image.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +19,7 @@ import 'package:matrix/matrix.dart';
 import '../../widgets/avatar.dart';
 import '../../widgets/matrix.dart';
 import 'command_hints.dart';
+import 'composer_keyboard.dart';
 
 class InputBar extends StatelessWidget {
   final Room room;
@@ -31,7 +28,7 @@ class InputBar extends StatelessWidget {
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
-  final ValueChanged<Uint8List?>? onSubmitImage;
+  final Future<void> Function(Uint8List?)? onSubmitImage;
   final FocusNode? focusNode;
   final TextEditingController? controller;
   final InputDecoration decoration;
@@ -404,30 +401,33 @@ class InputBar extends StatelessWidget {
         contextMenuBuilder: (c, e) => MarkdownContextBuilder(
           editableTextState: e,
           controller: controller,
+          onPaste: readOnly
+              ? null
+              : () {
+                  e.hideToolbar();
+                  const intent = PasteTextIntent(SelectionChangedCause.toolbar);
+                  // Flutter's default menu invokes plain-text paste directly,
+                  // bypassing the ancestor media-aware composer action.
+                  if (Actions.maybeFind<PasteTextIntent>(context) != null) {
+                    Actions.invoke(context, intent);
+                  } else {
+                    e.pasteText(SelectionChangedCause.toolbar);
+                  }
+                },
         ),
         contentInsertionConfiguration: ContentInsertionConfiguration(
           onContentInserted: (KeyboardInsertedContent content) async {
-            final proceed = await showTrustUserInRoomDialog(context, room);
-            if (!proceed) return;
+            if (readOnly || onSubmitImage == null) return;
             final data = content.data;
-            if (data == null) return;
-
-            // Typed (an image is a MatrixImageFile with its size), so the
-            // photo encoder runs: a transparent keyboard sticker stays
-            // transparent, an animated one whole (MD-01).
-            final file = await withImageSize(
-              MatrixFile(
-                mimeType: content.mimeType,
-                bytes: data,
-                name: content.uri.split('/').last,
-              ).detectFileType,
-            );
-            // Bubble first, upload in the bubble (like every attachment).
-            await OutgoingMedia.send(
-              room,
-              file,
-              shrinkImageMaxDimension: MediaQuality.photoMaxSide,
-            ).then<void>((_) {}, onError: (Object _) {});
+            if (data == null ||
+                data.isEmpty ||
+                !content.mimeType.startsWith('image/')) {
+              return;
+            }
+            // Paste/keyboard insertion is a selection, never consent to send.
+            // Use the same frozen destination, preview and explicit Send as
+            // the gallery and the media-aware clipboard action.
+            await onSubmitImage!(data);
           },
         ),
         minLines: minLines,
@@ -435,9 +435,7 @@ class InputBar extends StatelessWidget {
         keyboardType: keyboardType,
         textInputAction: textInputAction,
         autofocus: autofocus!,
-        inputFormatters: [
-          LengthLimitingTextInputFormatter((maxPDUSize / 3).floor()),
-        ],
+        inputFormatters: composerTextInputFormatters(),
         onSubmitted: (text) {
           // fix for library for now
           // it sets the types for the callback incorrectly

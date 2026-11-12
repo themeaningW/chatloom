@@ -1,0 +1,89 @@
+# iOS notification delivery in the beta
+
+This build supports **local notifications while ChatLoom is running and
+syncing**. Settings → Notifications lets the user request iOS permission,
+open the app's iPhone settings, and display a generic local test. Startup
+does not ask for permission automatically. The test does not read chats,
+send a message, or establish that remote delivery works.
+
+Incoming events use the existing eligibility, chat mute/ignore, active-chat,
+message-preview and app-lock policies. Taps use the existing account-aware
+notification router. Cold and warm delivery of the same response is deduplicated.
+No account, chat or message data is added to diagnostic logs.
+
+## What this does not implement
+
+There is no APNs registration, device-token upload, APNs-enabled provisioning,
+remote push gateway or notification-service extension in this change. Once
+iOS suspends or terminates ChatLoom, its foreground Matrix sync is not a
+notification delivery mechanism. Enabling local permission does not make
+remote notifications work. The settings page states this explicitly.
+
+The current build uses a free Personal Team. Apple's capability availability
+depends on program membership and the signing profile. Do not add an
+`aps-environment` entitlement to this project until a corresponding
+APNs-enabled App ID/profile and provider configuration exist: adding the XML
+alone cannot grant a capability and can make the free-account build fail.
+
+## Remote push follow-up
+
+1. Obtain an App ID and signing profile with Apple's Push Notifications capability.
+2. Implement APNs registration and account-bound token lifecycle, including logout
+   and token rotation; no token should be logged or shared in source.
+3. Add a gateway/provider path from Matrix push events to APNs and define the
+   generic notification fallback and encrypted-content handling.
+4. Test real-device delivery with the app foreground, background, suspended,
+   terminated, offline and locked. Test all preview/app-lock/mute policies.
+
+No developer account, profile, server or credentials are modified by this work.
+
+## Windows xcross runner
+
+xcross 2.0.9 generates its own Objective-C runner; it does not compile the
+project's Swift AppDelegate. Both runners must restore FlutterAppDelegate as
+the notification-center delegate **after plugin registration**, because a
+registered plugin can replace it. FlutterAppDelegate then forwards callbacks
+to the registered local-notification plugin.
+
+For a Windows cross build, run the following after the existing lab/toolchain
+setup and before `xcross flutter build` or `xcross flutter run`, in the same
+PowerShell 7 session. Use the physical checkout path as the working directory,
+not a junction alias. Pass the real clang selected by the local xcross setup;
+the current lab's generated SwiftPM toolset selects this LLVM installation:
+
+```powershell
+& .\scripts\ios\prepare-xcross-runner.ps1 -ProjectPath (Get-Location).Path -ClangPath 'C:\Program Files\LLVM\bin\clang.exe'
+```
+
+The helper builds a small managed compiler shim under `build/` and sets a
+process-local `XCROSS_APPLE_TOOL_CLANG` override. It forwards compiler arguments
+and exit status, prepares only this checkout's generated
+`build/xcross-flutter-runner-bin/Runner.m` immediately before compilation, and
+adds the UserNotifications framework only when linking that runner. This is
+repeatable even when xcross regenerates the source. An unexpected runner
+template fails before compilation. It changes no xcross binary, package source,
+entitlement or credential. Run the preparation again in each new PowerShell
+session; a standalone patch to generated Runner.m would be overwritten.
+
+`scripts/ios/test-prepare-xcross-runner.ps1` checks the shim against a synthetic
+compiler, including argument quoting, regeneration, idempotence, path scope,
+link-framework scope and rejection of an unsupported template. These checks
+do not establish real-device notification delivery. Xcode builds use the Swift
+AppDelegate directly and do not need this Windows helper.
+
+## Sources
+
+- [Apple: User Notifications](https://developer.apple.com/documentation/usernotifications/)
+  distinguishes app-created local notifications from server-generated APNs delivery.
+- [Apple: Asking permission](https://developer.apple.com/documentation/usernotifications/asking-permission-to-use-notifications)
+  describes authorization and checking current notification settings.
+- [Apple: Registering with APNs](https://developer.apple.com/documentation/usernotifications/registering-your-app-with-apns)
+  requires the Push Notifications capability and device registration.
+- [Apple: Add a capability](https://help.apple.com/xcode/mac/current/en.lproj/dev88ff319e7.html)
+  states that capabilities depend on target type and program membership.
+- [Apple: Supported iOS capabilities](https://developer.apple.com/help/account/reference/supported-capabilities-ios/)
+  lists availability by developer program.
+
+The platform-channel tests verify permission arguments, initialization retries,
+generic local test content and response deduplication. They are not evidence of
+physical-device notification delivery or successful APNs configuration.

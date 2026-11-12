@@ -8,6 +8,7 @@ import 'package:chatloom/config/themes.dart';
 import 'package:chatloom/l10n/l10n.dart';
 import 'package:chatloom/pages/settings_notifications/push_rule_extensions.dart';
 import 'package:chatloom/personal/push_rule_mirror.dart';
+import 'package:chatloom/personal/ui/ios_notifications_page.dart';
 import 'package:chatloom/personal/ui/notion_settings_body.dart';
 import 'package:chatloom/personal/ui/push_diagnostics_page.dart';
 import 'package:chatloom/ui/notion/notion.dart';
@@ -48,6 +49,7 @@ class SettingsNotificationsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformInfos.isIOS) return const IosNotificationsPage();
     if (!PlatformInfos.supportsSystemNotifications) {
       return NotionScaffold(
         title: 'Notifications',

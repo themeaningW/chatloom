@@ -7,7 +7,7 @@ name: chatloom
 description: Chat with your friends.
 publish_to: none
 # On version bump please also increase the build number.
-version: 2.10.0+3568
+version: 2.10.0+3569
 
 environment:
   sdk: ">=3.11.1 <4.0.0"
@@ -22,6 +22,7 @@ dependencies:
   connectivity_plus: 7.3.1
   crypto: ^3.0.7
   cross_file: ^0.3.5
+  cupertino_icons: 1.0.8
   cupertino_ui: ^1.1.1
   desktop_drop: ^0.8.4
   device_info_plus: ^13.2.0

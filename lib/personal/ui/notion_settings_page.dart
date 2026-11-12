@@ -124,145 +124,122 @@ class NotionSettingsPage extends StatelessWidget {
     required this.data,
     required this.actions,
   });
-
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width > 840;
+    final tokens = context.notion;
+    final wide = MediaQuery.sizeOf(context).width > NotionSize.contentMaxWidth;
     final selected = NotionSettingsCategory.forPath(data.selectedPath);
     Widget row(NotionSettingsCategory category) {
-      final active = wide && category == selected;
+      final account = category == NotionSettingsCategory.account;
       return Semantics(
-        selected: active,
-        // The selected background eases between rows in the sidebar.
-        child: AnimatedContainer(
-          duration: NotionMotion.of(context, NotionMotion.quick),
-          curve: NotionMotion.standard,
-          decoration: BoxDecoration(
-            color: active
-                ? Theme.of(context).colorScheme.surfaceContainerHighest
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(NotionTokens.radius),
+        selected: wide && category == selected,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: NotionSpace.md,
+            vertical: NotionSpace.xxs,
           ),
-          child: Material(
-            type: MaterialType.transparency,
-            borderRadius: BorderRadius.circular(NotionTokens.radius),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: NotionListRow(
-                leading: category == NotionSettingsCategory.account
-                    ? SizedBox.square(
-                        dimension: 24,
-                        child: ClipRRect(
-                          borderRadius: NotionRadius.avatarAll,
-                          child: FittedBox(
-                            fit: BoxFit.cover,
-                            child: SizedBox.square(
-                              dimension: 44,
-                              child: data.avatar,
-                            ),
-                          ),
-                        ),
-                      )
-                    : Icon(category.icon),
-                title: category == NotionSettingsCategory.account
-                    ? data.name
-                    : category.title,
-                subtitle: data.summaries[category] ?? category.summary,
-                onTap: actions.open == null
-                    ? null
-                    : () => actions.open!(category.route),
-              ),
+          child: NotionListRow(
+            leadingWidth: account ? NotionSize.touchTarget : NotionSize.iconLg,
+            leading: account
+                ? SizedBox.square(
+                    dimension: NotionSize.touchTarget,
+                    child: ClipRRect(
+                      borderRadius: NotionRadius.avatarAll,
+                      child: data.avatar,
+                    ),
+                  )
+                : Icon(category.icon, color: tokens.colors.accent),
+            title: account ? data.name : category.title,
+            subtitle: account && data.status != null
+                ? data.status
+                : data.summaries[category] ?? category.summary,
+            trailing: Icon(
+              Icons.chevron_right,
+              size: NotionSize.icon,
+              color: tokens.colors.textTertiary,
             ),
+            onTap: actions.open == null
+                ? null
+                : () => actions.open!(category.route),
           ),
         ),
       );
     }
 
-    // Rows scroll under the glass header, like every list page
-    // (DESIGN.md "Glass").
+    Widget group(Iterable<NotionSettingsCategory> categories) {
+      final entries = categories.toList();
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: tokens.colors.surface,
+          borderRadius: NotionRadius.mdAll,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < entries.length; i++) ...[
+              if (i > 0)
+                const Padding(
+                  padding: EdgeInsetsDirectional.only(
+                    start: NotionSize.touchTarget + NotionSpace.lg,
+                    end: NotionSpace.md,
+                  ),
+                  child: Divider(height: NotionSize.border),
+                ),
+              row(entries[i]),
+            ],
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        toolbarHeight: NotionTokens.headerHeight,
-        backgroundColor: Colors.transparent,
-        flexibleSpace: const NotionGlassBar(),
         leading: NotionIconButton(
           icon: Icons.chevron_left,
           label: 'Back to chats',
           onPressed: actions.back,
         ),
         title: const Text('Settings'),
-        centerTitle: false,
+        centerTitle: true,
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          // Rows rise in once after the push; rows built later by
-          // scrolling appear without animation.
-          child: NotionEntranceScope(
-            // Inside the Scaffold the top padding includes the header.
-            child: Builder(
-              builder: (context) => ListView(
-                key: const PageStorageKey('notion-settings'),
-                padding: EdgeInsets.fromLTRB(
-                  8,
-                  8 + MediaQuery.paddingOf(context).top,
-                  8,
-                  32,
-                ),
-                children: NotionEntrance.stagger([
-                  row(NotionSettingsCategory.account),
-                  NotionSizeReveal(
-                    visible: data.status != null,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Semantics(
-                        liveRegion: true,
-                        child: NotionFadeThrough(
-                          child: Text(
-                            data.status ?? '',
-                            key: ValueKey(data.status),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Divider(),
-                  ),
-                  for (final category in NotionSettingsCategory.values.where(
-                    (c) =>
-                        c.index < NotionSettingsCategory.reminders.index &&
-                        c != NotionSettingsCategory.account &&
-                        (data.notificationsAvailable ||
-                            c != NotionSettingsCategory.notifications),
-                  ))
-                    row(category),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      NotionSpace.sm,
-                      NotionSpace.xl,
-                      NotionSpace.sm,
-                      NotionSpace.xxs,
-                    ),
-                    child: NotionSettingsGroupLabel('Tools'),
-                  ),
-                  for (final category in NotionSettingsCategory.values.where(
-                    (c) => c.isTool,
-                  ))
-                    row(category),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: NotionSpace.sm,
-                      vertical: NotionSpace.xs,
-                    ),
-                    child: Divider(),
-                  ),
-                  row(NotionSettingsCategory.advanced),
-                ]),
-              ),
+          constraints: const BoxConstraints(
+            maxWidth: NotionSize.contentMaxWidth,
+          ),
+          child: ListView(
+            key: const PageStorageKey('notion-settings'),
+            padding: const EdgeInsets.fromLTRB(
+              NotionSpace.md,
+              NotionSpace.md,
+              NotionSpace.md,
+              NotionSpace.xxl,
             ),
+            children: [
+              group([NotionSettingsCategory.account]),
+              const SizedBox(height: NotionSpace.xl),
+              group(
+                NotionSettingsCategory.values.where(
+                  (c) =>
+                      c.index > 0 &&
+                      c.index < NotionSettingsCategory.reminders.index &&
+                      (data.notificationsAvailable ||
+                          c != NotionSettingsCategory.notifications),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(
+                  NotionSpace.md,
+                  NotionSpace.xl,
+                  NotionSpace.md,
+                  NotionSpace.xs,
+                ),
+                child: NotionSettingsGroupLabel('Tools'),
+              ),
+              group(NotionSettingsCategory.values.where((c) => c.isTool)),
+              const SizedBox(height: NotionSpace.xl),
+              group([NotionSettingsCategory.advanced]),
+            ],
           ),
         ),
       ),

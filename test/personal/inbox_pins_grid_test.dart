@@ -5,6 +5,7 @@ import 'package:chatloom/personal/ui/notion_inbox_pins.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -36,11 +37,16 @@ Widget _inbox(
   ScrollController? scroll,
   bool reduced = false,
   double width = 412,
+  double scale = 1,
 }) => MaterialApp(
   debugShowCheckedModeBanner: false,
   theme: NotionTheme.build(Brightness.dark),
   home: MediaQuery(
-    data: MediaQueryData(size: Size(width, 800), disableAnimations: reduced),
+    data: MediaQueryData(
+      size: Size(width, 800),
+      disableAnimations: reduced,
+      textScaler: TextScaler.linear(scale),
+    ),
     child: Scaffold(
       body: Align(
         alignment: Alignment.topLeft,
@@ -76,6 +82,82 @@ Offset _at(WidgetTester tester, String name) =>
     tester.getCenter(find.text(name));
 
 void main() {
+  testWidgets(
+    'large text uses one readable rail; every pin remains reachable and reorderable',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var taps = 0;
+      final orders = <List<String>>[];
+      await tester.pumpWidget(
+        _inbox(
+          NotionPinnedShortcuts(
+            pins: [
+              for (final (i, name) in _names.indexed)
+                _pin(name, i, tap: () => taps++),
+            ],
+            onReorder: (keys) async => orders.add(keys),
+          ),
+          width: 320,
+          scale: 2,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final rail = find.byKey(
+        const PageStorageKey('inbox-pins-accessibility-rail'),
+      );
+      expect(rail, findsOneWidget);
+      expect(
+        tester.getSize(find.byType(NotionPinnedShortcuts)).height,
+        lessThan(160),
+      );
+      final labelTop = tester.getTopLeft(find.text('Anna')).dy;
+      for (final name in _names) {
+        expect(
+          tester.getTopLeft(find.text(name)).dy,
+          labelTop,
+          reason: 'pins stay in one row',
+        );
+        expect(
+          tester
+              .renderObject<RenderParagraph>(find.text(name))
+              .didExceedMaxLines,
+          isFalse,
+          reason: '$name must remain readable',
+        );
+      }
+      await tester.tap(find.text('Anna'));
+      await tester.drag(rail, const Offset(-1200, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Piotr'));
+      expect(taps, 2);
+      expect(orders, isEmpty, reason: 'a touch scroll must not reorder');
+      final focus = Focus.of(tester.element(find.text('Piotr')));
+      focus.requestFocus();
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.pumpAndSettle();
+      expect(orders.single, [
+        'entity-Anna',
+        'entity-Team',
+        'entity-Mia',
+        'entity-Jan',
+        'entity-Piotr',
+        'entity-Ola',
+      ]);
+      expect(
+        Focus.of(tester.element(find.text('Piotr'))).hasPrimaryFocus,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   setUp(() => NotionHaptics.enabled = false);
   tearDown(() => NotionHaptics.enabled = true);
 

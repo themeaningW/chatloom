@@ -2638,7 +2638,8 @@ class _MergedChatPageState extends State<_MergedChatView>
       return;
     }
     final text = clipboard.text;
-    if (text == null || sendController.value != editorValue) {
+    if (text == null ||
+        !composerValueUnchangedForPaste(sendController.value, editorValue)) {
       return;
     }
     onInputBarChanged(insertComposerText(sendController, text));
@@ -2651,16 +2652,7 @@ class _MergedChatPageState extends State<_MergedChatView>
   @override
   Future<void> sendImageFromClipBoard(Uint8List? image) async {
     if (image == null || !composerEnabled) return;
-    await _attachMedia(
-      () async => [
-        XFile.fromData(
-          image,
-          name: 'pasted-image.png',
-          path: 'pasted-image.png',
-          mimeType: 'image/png',
-        ),
-      ],
-    );
+    await _attachMedia(() async => [composerClipboardImage(image)]);
   }
 
   @override

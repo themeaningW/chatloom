@@ -38,6 +38,95 @@ InboxRecord fixture(
 );
 
 void main() {
+  test('default All order follows activity, not the unread flag', () {
+    final items = [
+      fixture(
+        'older-unread',
+        unread: true,
+        activity: now.subtract(const Duration(days: 2)),
+      ),
+      fixture('newest-read', activity: now),
+      fixture('middle-read', activity: now.subtract(const Duration(days: 1))),
+    ];
+    expect(projectInbox(items).map((r) => r.entityId), [
+      'newest-read',
+      'middle-read',
+      'older-unread',
+    ]);
+    expect(
+      projectInbox(items, filter: InboxFilter.unread).map((r) => r.entityId),
+      ['older-unread'],
+    );
+    expect(
+      items.first.unread,
+      isTrue,
+      reason: 'ordering never changes read state',
+    );
+  });
+  test('all sort modes retain saved pin order before unpinned chats', () {
+    final items = [
+      fixture(
+        'second-pin',
+        pin: 1,
+        activity: now.subtract(const Duration(days: 10)),
+      ),
+      fixture('newest', activity: now),
+      fixture('oldest', activity: now.subtract(const Duration(days: 4))),
+      fixture(
+        'first-pin',
+        pin: 0,
+        activity: now.subtract(const Duration(days: 1)),
+      ),
+    ];
+    for (final sort in InboxSort.values) {
+      expect(projectInbox(items, sort: sort).take(2).map((r) => r.entityId), [
+        'first-pin',
+        'second-pin',
+      ]);
+    }
+    expect(
+      projectInbox(
+        items,
+        sort: InboxSort.oldestActivity,
+      ).skip(2).map((r) => r.entityId),
+      ['oldest', 'newest'],
+    );
+  });
+  test('unread filter follows the selected chronological direction', () {
+    final items = [
+      fixture('new', unread: true),
+      fixture(
+        'old',
+        unread: true,
+        activity: now.subtract(const Duration(days: 1)),
+      ),
+      fixture('read'),
+    ];
+    expect(
+      projectInbox(items, filter: InboxFilter.unread).map((r) => r.entityId),
+      ['new', 'old'],
+    );
+    expect(
+      projectInbox(
+        items,
+        filter: InboxFilter.unread,
+        sort: InboxSort.oldestActivity,
+      ).map((r) => r.entityId),
+      ['old', 'new'],
+    );
+  });
+  test(
+    'equal activity uses a deterministic ID tie break in every sort mode',
+    () {
+      final items = [fixture('b'), fixture('a')];
+      for (final sort in InboxSort.values) {
+        expect(projectInbox(items, sort: sort).map((r) => r.entityId), [
+          'a',
+          'b',
+        ]);
+      }
+    },
+  );
   test('Inbox hides archive, low priority and hidden labels', () {
     final result = projectInbox(
       [
@@ -179,13 +268,10 @@ void main() {
         activity: now.subtract(const Duration(days: 9)),
       ),
     ];
-    expect(projectInbox(items).map((r) => r.entityId), [
-      'pinned',
-      'older-unread',
-      'old-unread',
-      'newest',
-      'read',
-    ]);
+    expect(
+      projectInbox(items, sort: InboxSort.unreadFirst).map((r) => r.entityId),
+      ['pinned', 'older-unread', 'old-unread', 'newest', 'read'],
+    );
   });
   test('a moved-down unread chat sorts by time among the read ones', () {
     final items = [
@@ -210,7 +296,7 @@ void main() {
         activity: now.subtract(const Duration(days: 9)),
       ),
     ];
-    final result = projectInbox(items);
+    final result = projectInbox(items, sort: InboxSort.unreadFirst);
     expect(result.map((r) => r.entityId), [
       'pinned',
       'unread',
@@ -221,7 +307,11 @@ void main() {
     // Still unread: the Unread view keeps it, below the raised ones.
     expect(result.firstWhere((r) => r.entityId == 'moved').unread, isTrue);
     expect(
-      projectInbox(items, filter: InboxFilter.unread).map((r) => r.entityId),
+      projectInbox(
+        items,
+        filter: InboxFilter.unread,
+        sort: InboxSort.unreadFirst,
+      ).map((r) => r.entityId),
       ['pinned', 'unread', 'moved'],
     );
   });

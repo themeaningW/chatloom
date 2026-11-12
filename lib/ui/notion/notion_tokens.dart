@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:material_ui/material_ui.dart';
 
 import 'notion_appearance.dart';
@@ -117,6 +118,7 @@ abstract final class NotionShapes {
 /// Fixed component and icon dimensions.
 abstract final class NotionSize {
   static const double touchTarget = 48;
+  static const double composerFieldHeight = 50;
   static const double headerHeight = 56;
   static const double rowMinHeight = 52;
   static const double iconSm = 16;
@@ -220,35 +222,42 @@ abstract final class NotionType {
   /// (buttons, list tiles) never fall back to the platform font.
   static const family = 'Roboto';
 
+  /// Use the installed Apple system face, never redistribute Apple's font.
+  /// Bundled Roboto is an explicit fallback for other hosts and test captures.
+  static String get platformFamily => switch (defaultTargetPlatform) {
+    TargetPlatform.iOS || TargetPlatform.macOS => 'CupertinoSystemText',
+    _ => family,
+  };
+
   /// Badges and dense timestamps.
-  static const micro = TextStyle(fontFamily: family, fontSize: 11, height: 1.3);
+  static const micro = TextStyle(fontFamily: family, fontSize: 12, height: 1.3);
 
   /// Metadata, helper text, section labels.
   static const caption = TextStyle(
     fontFamily: family,
-    fontSize: 12,
-    height: 1.4,
+    fontSize: 13,
+    height: 1.35,
   );
 
   /// Row subtitles and secondary lines.
   static const footnote = TextStyle(
     fontFamily: family,
-    fontSize: 13,
-    height: 1.4,
+    fontSize: 15,
+    height: 1.35,
   );
 
   /// Dense body: property labels, menus, dialogs.
   static const callout = TextStyle(
     fontFamily: family,
-    fontSize: 15,
-    height: 1.4,
+    fontSize: 16,
+    height: 1.35,
   );
 
   /// Default reading size: row titles, messages.
-  static const body = TextStyle(fontFamily: family, fontSize: 16, height: 1.4);
+  static const body = TextStyle(fontFamily: family, fontSize: 17, height: 1.4);
   static const bodyStrong = TextStyle(
     fontFamily: family,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: FontWeight.w600,
     height: 1.4,
   );
@@ -272,7 +281,7 @@ abstract final class NotionType {
   /// Page title (one per screen).
   static const title = TextStyle(
     fontFamily: family,
-    fontSize: 30,
+    fontSize: 34,
     fontWeight: FontWeight.w700,
     height: 1.15,
   );
@@ -356,16 +365,16 @@ class NotionColors {
   });
 
   static const dark = NotionColors(
-    background: Color(0xFF191919),
-    surface: Color(0xFF252525),
-    selected: Color(0xFF2F2F2F),
-    border: Color(0xFF383838),
-    text: Color(0xFFE8E7E5),
-    textSecondary: Color(0xFFAAAAA5),
-    textTertiary: Color(0xFF7F7F7B),
-    cover: Color(0xFF33312B),
-    accent: Color(0xFFE8E7E5),
-    onAccent: Color(0xFF191919),
+    background: Color(0xFF101012),
+    surface: Color(0xFF1C1C1E),
+    selected: Color(0xFF2C2C2E),
+    border: Color(0xFF38383A),
+    text: Color(0xFFF2F2F7),
+    textSecondary: Color(0xFFAEAEB2),
+    textTertiary: Color(0xFF8E8E93),
+    cover: Color(0xFF242426),
+    accent: Color(0xFFF2F2F7),
+    onAccent: Color(0xFF101012),
     danger: Color(0xFFDF5452),
     success: Color(0xFF529E72),
     warning: Color(0xFFCA9849),
@@ -380,11 +389,11 @@ class NotionColors {
     surface: Color(0xFF141414),
     selected: Color(0xFF1F1F1F),
     border: Color(0xFF2C2C2C),
-    text: Color(0xFFE8E7E5),
-    textSecondary: Color(0xFFAAAAA5),
-    textTertiary: Color(0xFF7F7F7B),
+    text: Color(0xFFF2F2F7),
+    textSecondary: Color(0xFFAEAEB2),
+    textTertiary: Color(0xFF8E8E93),
     cover: Color(0xFF26241F),
-    accent: Color(0xFFE8E7E5),
+    accent: Color(0xFFF2F2F7),
     onAccent: Color(0xFF000000),
     danger: Color(0xFFDF5452),
     success: Color(0xFF529E72),
@@ -394,16 +403,16 @@ class NotionColors {
   );
 
   static const light = NotionColors(
-    background: Color(0xFFFAF9F6),
-    surface: Color(0xFFF0EFEB),
-    selected: Color(0xFFE8E7E3),
-    border: Color(0xFFD6D5D0),
-    text: Color(0xFF242424),
-    textSecondary: Color(0xFF65655F),
-    textTertiary: Color(0xFF91918E),
-    cover: Color(0xFFEEEAE0),
-    accent: Color(0xFF242424),
-    onAccent: Color(0xFFFAF9F6),
+    background: Color(0xFFF2F2F7),
+    surface: Color(0xFFFFFFFF),
+    selected: Color(0xFFE5E5EA),
+    border: Color(0xFFD1D1D6),
+    text: Color(0xFF1C1C1E),
+    textSecondary: Color(0xFF636366),
+    textTertiary: Color(0xFF76767A),
+    cover: Color(0xFFE5E5EA),
+    accent: Color(0xFF1C1C1E),
+    onAccent: Color(0xFFF2F2F7),
     danger: Color(0xFFD44C47),
     success: Color(0xFF448361),
     warning: Color(0xFFD9730D),
@@ -488,24 +497,35 @@ class NotionTypography {
     required this.sectionLabel,
   });
 
-  factory NotionTypography.of(NotionColors colors) => NotionTypography(
-    micro: NotionType.micro.copyWith(color: colors.textSecondary),
-    caption: NotionType.caption.copyWith(color: colors.text),
-    footnote: NotionType.footnote.copyWith(color: colors.text),
-    callout: NotionType.callout.copyWith(color: colors.text),
-    body: NotionType.body.copyWith(color: colors.text),
-    bodyStrong: NotionType.bodyStrong.copyWith(color: colors.text),
-    headline: NotionType.headline.copyWith(color: colors.text),
-    heading: NotionType.heading.copyWith(color: colors.text),
-    title: NotionType.title.copyWith(color: colors.text),
-    captionMuted: NotionType.caption.copyWith(color: colors.textSecondary),
-    footnoteMuted: NotionType.footnote.copyWith(color: colors.textSecondary),
-    calloutMuted: NotionType.callout.copyWith(color: colors.textSecondary),
-    sectionLabel: NotionType.caption.copyWith(
-      color: colors.textSecondary,
-      fontWeight: FontWeight.w500,
-    ),
-  );
+  factory NotionTypography.of(NotionColors colors) {
+    TextStyle resolved(TextStyle style) => style.copyWith(
+      fontFamily: NotionType.platformFamily,
+      fontFamilyFallback: const [NotionType.family],
+    );
+    return NotionTypography(
+      micro: resolved(NotionType.micro).copyWith(color: colors.textSecondary),
+      caption: resolved(NotionType.caption).copyWith(color: colors.text),
+      footnote: resolved(NotionType.footnote).copyWith(color: colors.text),
+      callout: resolved(NotionType.callout).copyWith(color: colors.text),
+      body: resolved(NotionType.body).copyWith(color: colors.text),
+      bodyStrong: resolved(NotionType.bodyStrong).copyWith(color: colors.text),
+      headline: resolved(NotionType.headline).copyWith(color: colors.text),
+      heading: resolved(NotionType.heading).copyWith(color: colors.text),
+      title: resolved(NotionType.title).copyWith(color: colors.text),
+      captionMuted: resolved(
+        NotionType.caption,
+      ).copyWith(color: colors.textSecondary),
+      footnoteMuted: resolved(
+        NotionType.footnote,
+      ).copyWith(color: colors.textSecondary),
+      calloutMuted: resolved(
+        NotionType.callout,
+      ).copyWith(color: colors.textSecondary),
+      sectionLabel: resolved(
+        NotionType.caption,
+      ).copyWith(color: colors.textSecondary, fontWeight: FontWeight.w500),
+    );
+  }
 
   static NotionTypography lerp(
     NotionTypography a,
@@ -682,13 +702,13 @@ class NotionTokens extends ThemeExtension<NotionTokens> {
   }
 
   // Transitional static API (v1). Dark palette only.
-  static const background = Color(0xFF191919);
-  static const surface = Color(0xFF252525);
-  static const selected = Color(0xFF2F2F2F);
-  static const border = Color(0xFF383838);
-  static const text = Color(0xFFE8E7E5);
-  static const secondary = Color(0xFFAAAAA5);
-  static const cover = Color(0xFF33312B);
+  static const background = Color(0xFF101012);
+  static const surface = Color(0xFF1C1C1E);
+  static const selected = Color(0xFF2C2C2E);
+  static const border = Color(0xFF38383A);
+  static const text = Color(0xFFF2F2F7);
+  static const secondary = Color(0xFFAEAEB2);
+  static const cover = Color(0xFF242426);
   static const double inset = NotionSpace.inset;
   static const double avatarRadius = NotionRadius.avatar;
   static const double radius = NotionRadius.md;

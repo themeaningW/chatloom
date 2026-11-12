@@ -33,9 +33,19 @@ void main() {
     final projection = InboxProjection.snapshot(personal);
     final index = projection.buildIndex(client.rooms);
 
-    expect(projection.select(index), [pinned, unread, recent]);
-    expect(projection.select(index, query: 'target'), [pinned, unread]);
-    expect(projection.select(index, query: 'missing'), isEmpty);
+    expect(projection.select(index, sort: InboxSort.unreadFirst), [
+      pinned,
+      unread,
+      recent,
+    ]);
+    expect(
+      projection.select(index, query: 'target', sort: InboxSort.unreadFirst),
+      [pinned, unread],
+    );
+    expect(
+      projection.select(index, query: 'missing', sort: InboxSort.unreadFirst),
+      isEmpty,
+    );
   });
 
   test(

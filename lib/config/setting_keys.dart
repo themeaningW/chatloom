@@ -73,6 +73,9 @@ enum AppSettings<T> {
   /// Local inbox, conversation layout and motion preferences (JSON).
   appearanceDisplay<String>('pl.personal.appearance.display', '{}'),
 
+  /// Local inbox order, independent from unread state and network selection.
+  inboxSort<String>('pl.personal.inbox.sort', 'latestActivity'),
+
   /// A custom accent colour as `#RRGGBB`; empty uses the accent preset.
   appearanceCustomAccent<String>('pl.personal.appearance.custom_accent', ''),
 
