@@ -158,6 +158,13 @@ fallback fonts, not physical iPhone screenshots. Live read-only checks reached
 the private Matrix API and all three authenticated provisioning routes. Real
 network search results still require signed-in device acceptance.
 
+The Windows xcross release build of source `0c8b6c9` completed as **2.10.0
+(3571)**. Its bundle metadata and compiled private bridge settings were checked;
+the notification delegate remains included. This build has not been installed
+on the phone: its USB tunnel setup stopped when Windows administrator approval
+was not granted. The existing 3570 installation was preserved. The toolchain's
+known missing dSYM and CocoaPods-only Share extension limits still apply.
+
 ## Rendered examples
 
 Rendered examples:
