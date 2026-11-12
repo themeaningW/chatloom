@@ -22,6 +22,13 @@ The system text face is used on iOS/macOS with bundled Roboto fallback on other
 hosts. Reading text is 17 logical pixels, page titles 34, and controls retain
 48-pixel hit targets. Respect system text scaling and reduced motion.
 
+Inbox controls and visible avatar/trailing edges use a 16-pixel safe-area
+gutter. Rows extend to 12 pixels and add 4 pixels internally; do not stack the
+generic page inset on top. Reserve only the avatar's actual scaled width,
+use the tighter 8-pixel scaled avatar/text gap, and align separators with the
+text for the selected density and avatar preference. Protect horizontal
+cutouts without adding the header's top or list's bottom safe area twice.
+
 The phone composer prioritizes the editor: only +, the source-aware field and
 mic/send stay visible. Emoji/GIFs, dictation, attachments and round video use
 the existing expandable + tray. Keep this layout through phone rotation so

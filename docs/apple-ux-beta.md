@@ -3,6 +3,30 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Edge-aligned inbox (3581)
+
+The header, hidden search panel and filter controls use a 16-point horizontal
+gutter. Conversation surfaces extend to 12 points and add 4 points internally,
+so visible avatars and trailing timestamps share the 16-point edge. Removed
+the avatar slot's extra reserved width and reduced the scaled avatar/text and
+metadata gaps. The user's avatar size, density, text scaling and unread-style
+preferences remain in effect. Separators follow the actual text inset,
+including when avatars are hidden.
+
+Horizontal safe-area protection keeps content clear of landscape cutouts;
+the header's top inset, search reveal, FAB and last-row bottom clearance retain
+their existing behavior. Desktop keeps its intentional two-column layout.
+
+48 focused regressions pass, covering 320/390/430-point portrait and 844-point
+landscape layouts, 1x/2x text, density/avatar preferences, RTL rows, status
+semantics, filters and hidden/revealed search. Production presenters were
+inspected in [dark](ux/apple/inbox-edge-dark.png) and
+[light](ux/apple/inbox-edge-light.png). Physical iPhone acceptance is pending.
+Full analysis has zero errors/warnings and the same 70 existing infos;
+changed-file analysis is clean and the strict design-token check passes.
+The separate presentation harness still lacks its external source-snapshot
+prerequisite; full-app production presenter fixtures supplied the captures.
+
 ## More room to type, app icon and brief feedback (3580)
 
 On phones and narrow windows, the composer keeps +, the source-aware editor

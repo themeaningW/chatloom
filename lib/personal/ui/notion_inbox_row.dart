@@ -11,6 +11,16 @@ const double _typingDot = 4;
 
 /// The actual inbox row presenter, also used by account-free visual captures.
 class NotionInboxRow extends StatelessWidget {
+  /// Leading edge of names/previews within the row. The page's separators
+  /// share it so avatar visibility and the user's density stay aligned.
+  static double contentInsetOf(BuildContext context) {
+    final display = NotionDisplayPreferences.of(context);
+    return NotionSpace.xxs +
+        (display.inboxAvatars
+            ? (NotionSize.avatarLg + NotionSpace.xs) * display.inboxScale
+            : 0);
+  }
+
   final Widget avatar;
   final String name;
   final String preview;
@@ -158,7 +168,7 @@ class NotionInboxRow extends StatelessWidget {
                 borderRadius: NotionRadius.rowAll,
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: NotionSpace.xs,
+                    horizontal: NotionSpace.xxs,
                     vertical: NotionSpace.sm * scale,
                   ),
                   child: ConstrainedBox(
@@ -172,9 +182,7 @@ class NotionInboxRow extends StatelessWidget {
                         if (display.inboxAvatars)
                           ExcludeSemantics(
                             child: SizedBox.square(
-                              dimension:
-                                  (NotionSize.avatarLg + NotionSpace.xs) *
-                                  scale,
+                              dimension: NotionSize.avatarLg * scale,
                               // One shape with or without the badge, so the
                               // avatar keeps its element when the network
                               // filter changes (no image reload).
@@ -204,7 +212,7 @@ class NotionInboxRow extends StatelessWidget {
                             ),
                           ),
                         if (display.inboxAvatars)
-                          SizedBox(width: NotionSpace.sm * scale),
+                          SizedBox(width: NotionSpace.xs * scale),
                         Expanded(
                           child: ExcludeSemantics(
                             child: Column(
@@ -341,7 +349,7 @@ class NotionInboxRow extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: NotionSpace.xs),
                         ExcludeSemantics(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
