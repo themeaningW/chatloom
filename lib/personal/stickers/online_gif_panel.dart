@@ -351,20 +351,26 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
       children: [
         Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: NotionSpace.xs),
-              child: NotionChoicePill<GifProvider>(
-                title: 'GIF source',
-                value: _source.provider,
-                neutral: GifProvider.klipy,
-                onChanged: _selectProvider,
-                options: const [
-                  NotionChoice(GifProvider.klipy, 'KLIPY'),
-                  NotionChoice(GifProvider.giphy, 'GIPHY'),
-                ],
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NotionSpace.xs,
+                  ),
+                  child: NotionChoicePill<GifProvider>(
+                    title: 'GIF source',
+                    value: _source.provider,
+                    neutral: GifProvider.klipy,
+                    onChanged: _selectProvider,
+                    options: const [
+                      NotionChoice(GifProvider.klipy, 'KLIPY'),
+                      NotionChoice(GifProvider.giphy, 'GIPHY'),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const Spacer(),
             NotionIconButton(
               icon: Icons.bookmark_outline,
               label: 'Saved GIFs and Telegram',
