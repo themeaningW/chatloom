@@ -31,6 +31,14 @@ dismissal, notification privacy/grouping and label regressions. Native iPhone
 presentation, gestures, actual frame timing and remote push require separate
 device acceptance.
 
+The Windows xcross release of `7dcfe8c` completed as **2.10.0 (3574)**.
+Version metadata, feedback/alert controls in AOT, private bridge configuration
+and the native notification delegate hook were verified. App analysis has zero
+errors/warnings and 70 existing informational findings; the strict design-token
+no-growth check passes. This artifact has not been installed on the iPhone.
+The known dSYM and Share extension limitations remain. The current signing
+account remains a free Personal Team; no APNs service/profile was configured.
+
 ## Custom labels (3573)
 
 The existing private label model is now available from the inbox's label icon
