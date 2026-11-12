@@ -28,6 +28,8 @@ generic page inset on top. Reserve only the avatar's actual scaled width,
 use the tighter 8-pixel scaled avatar/text gap, and align separators with the
 text for the selected density and avatar preference. Protect horizontal
 cutouts without adding the header's top or list's bottom safe area twice.
+In split view, retain safe insets only at physical outer screen edges, not
+against the divider; inherit the outer Scaffold body's keyboard metrics.
 
 The phone composer prioritizes the editor: only +, the source-aware field and
 mic/send stay visible. Emoji/GIFs, dictation, attachments and round video use

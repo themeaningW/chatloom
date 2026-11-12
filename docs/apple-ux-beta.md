@@ -16,10 +16,14 @@ including when avatars are hidden.
 Horizontal safe-area protection keeps content clear of landscape cutouts;
 the header's top inset, search reveal, FAB and last-row bottom clearance retain
 their existing behavior. Desktop keeps its intentional two-column layout.
+Split panes discard only their inward safe padding, mirrored for RTL, while
+retaining the outer screen cutout inset. Pane wrappers inherit the outer
+Scaffold body's metrics so keyboard resizing is applied only once.
 
-48 focused regressions pass, covering 320/390/430-point portrait and 844-point
+61 focused regressions pass, covering 320/390/430-point portrait and 844-point
 landscape layouts, 1x/2x text, density/avatar preferences, RTL rows, status
-semantics, filters and hidden/revealed search. Production presenters were
+semantics, split-pane/keyboard metrics, list motion, filters and hidden/revealed
+search. Production presenters were
 inspected in [dark](ux/apple/inbox-edge-dark.png) and
 [light](ux/apple/inbox-edge-light.png). Physical iPhone acceptance is pending.
 Full analysis has zero errors/warnings and the same 70 existing infos;

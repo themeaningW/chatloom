@@ -7,6 +7,7 @@ import 'package:chatloom/personal/ui/notion_inbox_page.dart';
 import 'package:chatloom/personal/ui/notion_inbox_row.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
+import 'package:chatloom/widgets/layouts/two_column_layout.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
@@ -30,6 +31,9 @@ void main() {
     double scale = 1,
     EdgeInsets safe = const EdgeInsets.only(top: 59, bottom: 34),
     Brightness brightness = Brightness.dark,
+    bool split = false,
+    TextDirection direction = TextDirection.ltr,
+    ValueChanged<EdgeInsets>? onSidePadding,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = size;
@@ -48,7 +52,22 @@ void main() {
             viewPadding: safe,
             textScaler: TextScaler.linear(scale),
           ),
-          child: child!,
+          child: Directionality(
+            textDirection: direction,
+            child: split
+                ? TwoColumnLayout(
+                    mainView: child!,
+                    sideView: Builder(
+                      builder: (context) {
+                        onSidePadding?.call(MediaQuery.paddingOf(context));
+                        return const SizedBox.expand(
+                          key: ValueKey('side-pane-body'),
+                        );
+                      },
+                    ),
+                  )
+                : child!,
+          ),
         ),
         home: RepaintBoundary(
           key: const ValueKey('capture-inbox-edge'),
@@ -139,6 +158,66 @@ void main() {
       });
     }
   }
+
+  for (final direction in TextDirection.values) {
+    testWidgets('split inbox consumes only outer safe edge: $direction', (
+      tester,
+    ) async {
+      EdgeInsets? sidePadding;
+      await mount(
+        tester,
+        size: const Size(844, 430),
+        safe: const EdgeInsets.only(left: 44, right: 34, bottom: 21),
+        split: true,
+        direction: direction,
+        onSidePadding: (value) => sidePadding = value,
+      );
+      final pane = tester.getRect(find.byType(NotionInboxPage));
+      final time = tester.getRect(find.text('16:36'));
+      final avatar = tester.getRect(find.byKey(const ValueKey('avatar-0')));
+      final ltr = direction == TextDirection.ltr;
+      if (ltr) {
+        expect(avatar.left, 60);
+        expect(time.right, pane.right - 16);
+        expect(sidePadding!.left, 0);
+        expect(sidePadding!.right, 34);
+      } else {
+        expect(avatar.right, 844 - 34 - 16);
+        expect(time.left, pane.left + 16);
+        expect(sidePadding!.left, 44);
+        expect(sidePadding!.right, 0);
+      }
+      expect(sidePadding!.bottom, 21);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('split inbox does not apply keyboard resizing twice', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      size: const Size(844, 430),
+      split: true,
+      safe: const EdgeInsets.only(left: 44, right: 34, bottom: 21),
+    );
+    tester.view.viewInsets = const FakeViewPadding(bottom: 200);
+    await tester.pumpAndSettle();
+    final body = find
+        .descendant(
+          of: find.byType(NotionInboxPage),
+          matching: find.byType(SafeArea),
+        )
+        .first;
+    expect(tester.getSize(body).height, 230);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('side-pane-body'))).height,
+      230,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('revealed search shares the header gutter', (tester) async {
     await mount(tester, size: const Size(430, 932));

@@ -76,6 +76,7 @@ class _TwoColumnLayoutState extends State<TwoColumnLayout>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
 
     return ScaffoldMessenger(
       child: Scaffold(
@@ -88,7 +89,15 @@ class _TwoColumnLayoutState extends State<TwoColumnLayout>
               width: ChatLoomThemes.columnWidth,
               // Each column owns its transient messages. In particular the
               // inbox Scaffold must place them above its floating dock.
-              child: ScaffoldMessenger(child: widget.mainView),
+              child: Builder(
+                builder: (context) => MediaQuery.removePadding(
+                  context: context,
+                  // This edge meets the other pane, not the screen cutout.
+                  removeLeft: rtl,
+                  removeRight: !rtl,
+                  child: ScaffoldMessenger(child: widget.mainView),
+                ),
+              ),
             ),
             Container(width: 1.0, color: theme.dividerColor),
             Expanded(
@@ -100,7 +109,15 @@ class _TwoColumnLayoutState extends State<TwoColumnLayout>
                     opacity: _opacity,
                     // The pane stays reachable while it fades in.
                     alwaysIncludeSemantics: true,
-                    child: widget.sideView,
+                    child: Builder(
+                      builder: (context) => MediaQuery.removePadding(
+                        context: context,
+                        // The side pane's leading edge is the inner divider.
+                        removeLeft: !rtl,
+                        removeRight: rtl,
+                        child: widget.sideView,
+                      ),
+                    ),
                   ),
                 ),
               ),
