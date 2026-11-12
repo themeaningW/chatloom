@@ -67,7 +67,7 @@ void main() {
         ),
       ),
     );
-    expect(tester.getSize(find.byType(CompactComposer)).height, 62);
+    expect(tester.getSize(find.byType(CompactComposer)).height, 58);
     expect(
       tester.getSize(find.widgetWithIcon(IconButton, Icons.add)),
       const Size(48, 48),

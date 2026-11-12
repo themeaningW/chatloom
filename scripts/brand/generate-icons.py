@@ -10,10 +10,10 @@ Sources (vector, edit these or scripts/brand/build-sources.py):
 Writes the app icon master docs/brand/chatloom-app-icon.svg and the rasters:
 in-app logo (assets/logo/), Android launcher (adaptive foreground,
 background and monochrome layers plus legacy mipmaps), notification icon,
-pre-12 and Android 12 splash, macOS AppIcon, web icons and the brand PNGs.
+pre-12 and Android 12 splash, iOS/macOS AppIcon, web icons and the brand PNGs.
 
-Rendering uses rsvg-convert, ffmpeg's librsvg decoder or the cairosvg Python
-module, whichever is found first; everything else is the standard library.
+Rendering uses rsvg-convert, resvg, ffmpeg's librsvg decoder or the cairosvg
+Python module. iOS icons also use Pillow to write opaque RGB PNGs.
 Re-running is idempotent.
 
 Usage: python3 scripts/brand/generate-icons.py [--check]
@@ -24,6 +24,7 @@ Usage: python3 scripts/brand/generate-icons.py [--check]
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import struct
@@ -36,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BRAND = ROOT / 'docs/brand'
 RES = 'android/app/src/main/res'
 MAC = 'macos/Runner/Assets.xcassets/AppIcon.appiconset'
+IOS = 'ios/Runner/Assets.xcassets/AppIcon.appiconset'
 
 # Visual bounds of the mark inside its 1024 box (see build-sources.py) and
 # the radius of its bounding circle around the box centre (the tail tip of
@@ -179,6 +181,12 @@ def macos_icon():
     return doc(C, C, body + '\n' + place('chatloom-mark.svg', C / 2, C / 2 - 4, s, 'm-'))
 
 
+def ios_icon():
+    """Opaque, edge-to-edge artwork; iOS supplies the platform icon mask."""
+    s = mark_width_scale(0.60, C)
+    return doc(C, C, full_bleed(C) + '\n' + place('chatloom-mark.svg', C / 2, C / 2, s, 'm-'))
+
+
 # Adaptive icons are 108 dp; launchers show at least the central 72 dp
 # (a circle mask may cut everything outside a 72 dp circle).
 ADAPTIVE = 108.0
@@ -247,6 +255,8 @@ def source(name):
 def find_renderer():
     if shutil.which('rsvg-convert'):
         return 'rsvg'
+    if shutil.which('resvg'):
+        return 'resvg'
     if shutil.which('ffmpeg'):
         out = subprocess.run(['ffmpeg', '-hide_banner', '-decoders'], capture_output=True, text=True).stdout
         if 'librsvg' in out:
@@ -256,7 +266,7 @@ def find_renderer():
         return 'cairosvg'
     except ImportError:
         pass
-    raise SystemExit('No SVG renderer: install librsvg (rsvg-convert), ffmpeg with librsvg or `pip install cairosvg`.')
+    raise SystemExit('No SVG renderer: install librsvg (rsvg-convert), resvg, ffmpeg with librsvg or `pip install cairosvg`.')
 
 
 def render(renderer, svg_text, out, w, h=None):
@@ -268,6 +278,8 @@ def render(renderer, svg_text, out, w, h=None):
     try:
         if renderer == 'rsvg':
             subprocess.run(['rsvg-convert', '-w', str(w), '-h', str(h), '-o', str(out), str(src)], check=True)
+        elif renderer == 'resvg':
+            subprocess.run(['resvg', '--width', str(w), '--height', str(h), str(src), str(out)], check=True)
         elif renderer == 'ffmpeg':
             subprocess.run(
                 ['ffmpeg', '-v', 'error', '-y', '-width', str(w), '-height', str(h), '-keep_ar', '0',
@@ -327,6 +339,19 @@ def jobs():
     for n in (16, 32, 64, 128, 256, 512, 1024):
         add(mac, f'{MAC}/app_icon_{n}.png', n)
 
+    # iOS: keep the Xcode catalog's complete iPhone/iPad/marketing slots.
+    # The same PNGs are explicit loose resources for xcross versions that
+    # do not compile asset catalogs. Never rasterize a different logo there.
+    ios = ios_icon()
+    catalog = json.loads((ROOT / IOS / 'Contents.json').read_text())
+    sizes = {}
+    for item in catalog['images']:
+        points = float(item['size'].split('x')[0])
+        pixels = round(points * float(item['scale'].removesuffix('x')))
+        sizes[item['filename']] = pixels
+    for name, pixels in sizes.items():
+        add(ios, f'{IOS}/{name}', pixels)
+
     # Web.
     fav = favicon()
     add(fav, 'web/favicon.png', 16)
@@ -341,16 +366,28 @@ def jobs():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--check', action='store_true', help='render to a temporary directory and compare sizes')
+    ap.add_argument('--platform', choices=['all', 'ios'], default='all', help='limit generation to iOS app icons')
     args = ap.parse_args()
+    try:
+        from PIL import Image
+    except ImportError:
+        raise SystemExit('iOS RGB icons require Pillow: `pip install Pillow`.')
     renderer = find_renderer()
     target = Path(tempfile.mkdtemp(prefix='chatloom-icons-')) if args.check else ROOT
 
-    if not args.check:
+    if not args.check and args.platform == 'all':
         (BRAND / 'chatloom-app-icon.svg').write_text(app_icon())
 
     todo = jobs()
+    if args.platform == 'ios':
+        todo = [job for job in todo if job[1].startswith(IOS + '/')]
     for svg_text, rel, w, h in todo:
         render(renderer, svg_text, target / rel, w, h)
+        if rel.startswith(IOS + '/'):
+            with Image.open(target / rel) as image:
+                if image.mode == 'RGBA' and image.getextrema()[3] != (255, 255):
+                    raise SystemExit(f'iOS icon has transparent pixels: {rel}')
+                image.convert('RGB').save(target / rel)
 
     bad = 0
     for _, rel, w, h in todo:

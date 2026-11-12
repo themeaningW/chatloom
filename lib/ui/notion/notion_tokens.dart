@@ -131,6 +131,7 @@ abstract final class NotionSize {
   static const double avatarLg = 56;
   static const double border = 1;
   static const double dialogMaxWidth = 420;
+  static const double composerCompactWidth = 600;
   static const double contentMaxWidth = 720;
 
   /// [showNotionSheet] becomes a centred dialog on desktop from this window

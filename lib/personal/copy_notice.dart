@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'dart:async';
 
+import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/utils/platform_infos.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -30,5 +31,7 @@ Future<void> showCopiedNotice(BuildContext context, String label) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
   if (await systemShowsClipboardOverlay()) return;
-  messenger.showSnackBar(SnackBar(content: Text(label)));
+  messenger.showSnackBar(
+    SnackBar(duration: NotionMotion.feedbackHold, content: Text(label)),
+  );
 }

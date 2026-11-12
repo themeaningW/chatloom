@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:chatloom/config/app_config.dart';
@@ -45,11 +46,7 @@ void main() {
       for (final MapEntry(key: pattern, value: dp) in sizes.entries) {
         final path = '$_res/${pattern.replaceFirst('%', density)}';
         final px = (dp * scale).round();
-        expect(
-          _pngSize(File(path).readAsBytesSync()),
-          (px, px),
-          reason: path,
-        );
+        expect(_pngSize(File(path).readAsBytesSync()), (px, px), reason: path);
       }
     }
   });
@@ -92,5 +89,62 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('iOS has opaque RGB artwork for every app-icon catalog slot', () {
+    const folder = 'ios/Runner/Assets.xcassets/AppIcon.appiconset';
+    final catalog =
+        jsonDecode(File('$folder/Contents.json').readAsStringSync())
+            as Map<String, dynamic>;
+    for (final image in catalog['images'] as List) {
+      final filename = image['filename'] as String;
+      final points = double.parse((image['size'] as String).split('x').first);
+      final scale = double.parse(
+        (image['scale'] as String).replaceAll('x', ''),
+      );
+      final pixels = (points * scale).round();
+      final bytes = File('$folder/$filename').readAsBytesSync();
+      expect(_pngSize(bytes), (pixels, pixels), reason: filename);
+      expect(
+        bytes[25],
+        2,
+        reason: '$filename must be opaque RGB, without alpha',
+      );
+    }
+  });
+
+  test('iOS primary-icon metadata names staged loose resources for xcross', () {
+    const folder = 'ios/Runner/Assets.xcassets/AppIcon.appiconset';
+    final catalog =
+        jsonDecode(File('$folder/Contents.json').readAsStringSync())
+            as Map<String, dynamic>;
+    final info = File('ios/Runner/Info.plist').readAsStringSync();
+    final project = File(
+      'ios/Runner.xcodeproj/project.pbxproj',
+    ).readAsStringSync();
+    final resources = project
+        .split('/* Begin PBXResourcesBuildPhase section */')[1]
+        .split('/* End PBXResourcesBuildPhase section */')[0];
+    for (final idiom in ['iphone', 'ipad']) {
+      final expected = {
+        for (final image in catalog['images'] as List)
+          if (image['idiom'] == idiom) image['filename'] as String,
+      };
+      final key = idiom == 'iphone' ? 'CFBundleIcons' : 'CFBundleIcons~ipad';
+      final primary = RegExp(
+        '<key>$key</key>\\s*<dict>\\s*'
+        '<key>CFBundlePrimaryIcon</key>\\s*<dict>(.*?)</dict>\\s*</dict>',
+        dotAll: true,
+      ).firstMatch(info);
+      expect(primary, isNotNull, reason: key);
+      final files = RegExp(
+        r'<string>([^<]+)</string>',
+      ).allMatches(primary!.group(1)!).map((m) => m.group(1)!).toSet();
+      expect(files, expected, reason: idiom);
+      for (final filename in files) {
+        expect(resources, contains('/* $filename in Resources */,'));
+        expect(project, contains('path = "$filename";'));
+      }
+    }
   });
 }

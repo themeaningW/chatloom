@@ -42,6 +42,10 @@ abstract final class NotionMotion {
   /// Sheets and page pushes.
   static const Duration long = Duration(milliseconds: 320);
 
+  /// Reading time for brief confirmations, independent of reduced motion.
+  /// Errors and explicitly longer recovery actions keep their own duration.
+  static const Duration feedbackHold = Duration(milliseconds: 2500);
+
   /// Per-item interval of a staggered entrance.
   static const Duration stagger = Duration(milliseconds: 28);
 

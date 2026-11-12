@@ -496,6 +496,7 @@ class _PersonPageState extends State<PersonPage> {
 
   Future<void> _archive(PersonGroup group, bool archived) async {
     final messenger = ScaffoldMessenger.of(context);
+    final keepFeedback = MediaQuery.accessibleNavigationOf(context);
     final saved = await runPersonChange(
       context,
       () => setPersonArchived(personal, group, archived),
@@ -508,6 +509,8 @@ class _PersonPageState extends State<PersonPage> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          duration: NotionMotion.feedbackHold,
+          persist: keepFeedback,
           content: const Text('Chat archived'),
           action: SnackBarAction(
             label: 'Undo',

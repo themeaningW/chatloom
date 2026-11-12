@@ -89,8 +89,8 @@ class CompactComposer extends StatefulWidget {
 
 class _CompactComposerState extends State<CompactComposer>
     with SingleTickerProviderStateMixin {
-  // Insets + both 48dp actions + gaps (16 + 48 + 4 + 4 + 48).
-  static const double _rowChrome = 120;
+  // Insets + both 48dp actions + gaps (8 + 48 + 4 + 4 + 48).
+  static const double _rowChrome = 112;
   // Divider + editor padding inside the field.
   static const double _fieldChrome = 13;
   // Collapsed editor minimum that decides whether the source stays inline.
@@ -269,7 +269,10 @@ class _CompactComposerState extends State<CompactComposer>
       final trayRoom = yieldSource ? roomBeside(0) : roomWithSource;
       final slots = slotsIn(trayRoom);
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(
+          horizontal: NotionSpace.xxs,
+          vertical: NotionSpace.xxs,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -332,6 +335,7 @@ class _CompactComposerState extends State<CompactComposer>
                 ),
                 const SizedBox(width: NotionSpace.xxs),
                 Expanded(
+                  key: const ValueKey('composer-editor-slot'),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: colors.surfaceContainer,
@@ -384,7 +388,7 @@ class _CompactComposerState extends State<CompactComposer>
                                       horizontal:
                                           constraints.maxWidth <
                                               NotionSize.dialogMaxWidth
-                                          ? NotionSpace.xxs
+                                          ? 0
                                           : NotionSpace.sm,
                                     ),
                                     child: widget.input,

@@ -138,6 +138,7 @@ class _AppFeedbackSheetState extends State<AppFeedbackSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          duration: NotionMotion.feedbackHold,
           content: Text('Text report copied.'),
         ),
       );

@@ -172,7 +172,8 @@ Future<void> showPersonNotificationsSheet(
   await runPersonChange(
     context,
     () => setPersonNotificationMode(personal, group, mode),
-    failure: 'Notifications were not changed. Check private sync and try again.',
+    failure:
+        'Notifications were not changed. Check private sync and try again.',
   );
 }
 
@@ -181,7 +182,8 @@ Future<void> showPersonNotificationsSheet(
 Future<bool> runPersonChange(
   BuildContext context,
   Future<void> Function() change, {
-  String failure = 'The change was not saved. Check private sync and try again.',
+  String failure =
+      'The change was not saved. Check private sync and try again.',
 }) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   try {
@@ -218,6 +220,7 @@ Future<void> addChatsToPerson(
     return;
   }
   final messenger = ScaffoldMessenger.of(context);
+  final keepFeedback = MediaQuery.accessibleNavigationOf(context);
   final MergePlan plan;
   try {
     plan = planAddToPerson(personal, group, [
@@ -236,6 +239,8 @@ Future<void> addChatsToPerson(
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
+        duration: NotionMotion.feedbackHold,
+        persist: keepFeedback,
         content: const Text('Added to the merged chat'),
         action: SnackBarAction(
           label: 'Undo',
@@ -265,6 +270,7 @@ Future<void> removeChatFromPerson(
   VoidCallback? onUnmerged,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
+  final keepFeedback = MediaQuery.accessibleNavigationOf(context);
   PersonGroup? next;
   try {
     next = await removePersonSource(personal, group, roomId);
@@ -283,6 +289,8 @@ Future<void> removeChatFromPerson(
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
+        duration: NotionMotion.feedbackHold,
+        persist: keepFeedback,
         content: Text(
           next == null ? 'Chats unmerged' : 'Removed from the merged chat',
         ),
@@ -311,6 +319,7 @@ Future<void> unmergePerson(
   required PersonGroup group,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
+  final keepFeedback = MediaQuery.accessibleNavigationOf(context);
   // Hidden at once; the delete may wait for a merge acknowledgement. If that
   // never comes, the person returns and the user is told.
   unawaited(
@@ -326,6 +335,8 @@ Future<void> unmergePerson(
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
+        duration: NotionMotion.feedbackHold,
+        persist: keepFeedback,
         content: const Text('Chats unmerged'),
         action: SnackBarAction(
           label: 'Undo',
@@ -376,6 +387,7 @@ Future<void> replacePersonSource(
     return;
   }
   final messenger = ScaffoldMessenger.of(context);
+  final keepFeedback = MediaQuery.accessibleNavigationOf(context);
   try {
     final plan = planAddToPerson(personal, group, [
       for (final candidate in picked) ...candidate.sources,
@@ -394,6 +406,8 @@ Future<void> replacePersonSource(
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          duration: NotionMotion.feedbackHold,
+          persist: keepFeedback,
           content: const Text('Chat replaced'),
           action: SnackBarAction(
             label: 'Undo',

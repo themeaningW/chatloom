@@ -75,11 +75,14 @@ class _PeopleSettingsSectionState extends State<PeopleSettingsSection> {
 
   Future<void> _apply(MergePlan plan) async {
     final messenger = ScaffoldMessenger.of(context);
+    final keepFeedback = MediaQuery.accessibleNavigationOf(context);
     await applyMerge(personal, plan);
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          duration: NotionMotion.feedbackHold,
+          persist: keepFeedback,
           content: Text(
             plan.createsGroup ? 'Chats merged' : 'Added to the merged chat',
           ),

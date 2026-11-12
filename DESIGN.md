@@ -22,6 +22,12 @@ The system text face is used on iOS/macOS with bundled Roboto fallback on other
 hosts. Reading text is 17 logical pixels, page titles 34, and controls retain
 48-pixel hit targets. Respect system text scaling and reduced motion.
 
+The phone composer prioritizes the editor: only +, the source-aware field and
+mic/send stay visible. Emoji/GIFs, dictation, attachments and round video use
+the existing expandable + tray. Keep this layout through phone rotation so
+held recording gestures retain their owner. Narrow desktop windows share it.
+Composer insets are 4 pixels; avoid stacking extra padding inside the field.
+
 Settings uses grouped surfaces with inset separators, clear chevrons and a
 larger account avatar. The conversation header drops decorative dividers.
 Glass is optional settled chrome, not a requirement to blur every surface.

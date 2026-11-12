@@ -1526,6 +1526,8 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          duration: NotionMotion.feedbackHold,
+          persist: MediaQuery.accessibleNavigationOf(context),
           content: Text(
             plan.createsGroup ? 'Chats merged' : 'Added to the merged chat',
           ),
@@ -1561,6 +1563,8 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          duration: NotionMotion.feedbackHold,
+          persist: MediaQuery.accessibleNavigationOf(context),
           content: const Text('Chats unmerged'),
           action: SnackBarAction(
             label: 'Undo',

@@ -110,7 +110,7 @@ void main() {
           expect(roundRect.right, micRect.left);
           expect(roundRect.center.dy, micRect.center.dy);
           // Single-line row: the source chip stays inside the field.
-          expect(tester.getSize(find.byType(CompactComposer)).height, 62);
+          expect(tester.getSize(find.byType(CompactComposer)).height, 58);
           expect(
             tester.getSize(find.byType(TextField)).width,
             greaterThan(100),
@@ -143,7 +143,9 @@ void main() {
       await tester.pumpAndSettle();
       final editable = tester.state(find.byType(EditableText));
       final open = tester.getSize(find.byType(TextField)).width;
-      final composerHeight = tester.getSize(find.byType(CompactComposer)).height;
+      final composerHeight = tester
+          .getSize(find.byType(CompactComposer))
+          .height;
 
       // The host drops the round button with the first letter.
       editor.text = 'H';

@@ -50,6 +50,29 @@ them. The wordmark uses Roboto Bold (Apache-2.0, bundled in
 The mark keeps its blue and cyan whatever accent a user picks in Settings →
 Appearance. The accent changes the app, not the brand.
 
+### iOS app and notification identity
+
+The iOS AppIcon catalog uses the same glass mark on an opaque, edge-to-edge
+background; iOS applies its own icon mask. Regenerate these files with
+`python scripts/brand/generate-icons.py --platform ios` (Pillow plus a supported
+SVG renderer, including resvg). Every iPhone/iPad/marketing slot is an RGB PNG.
+
+The catalog PNGs are also explicit loose Xcode resources, declared by
+`CFBundleIcons`/`CFBundleIcons~ipad`. This preserves the app identity in pinned
+Windows xcross versions that skip `.xcassets`; Xcode keeps its normal catalog
+build. The [pinned xcross resource stager](https://github.com/arxdeus/xcross/blob/v2.0.9/packages/xcross/lib/src/shared/flutter/build/ios_bundle_resources.dart)
+copies those explicit resources to the bundle root. The full PNG filenames
+match Apple's [CFBundleIconFiles contract](https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html).
+iOS [uses the installed app icon beside notifications](https://developer.apple.com/design/human-interface-guidelines/notifications),
+so no image attachment or separate Android-style notification icon is
+substituted there.
+
+Run `python scripts/ios/verify-app-icons.py` for source checks, or add
+`--bundle build/xcross-ios/chatloom.app` to verify staged filenames, dimensions,
+RGB encoding, matching icon dictionaries and exact PNG bytes before signing.
+SpringBoard's icon cache and actual notification presentation require a device
+check after updating the app.
+
 ## Construction
 
 - 1024 × 1024 box. The visual bounds of the mark are x 140–884, y 144–880

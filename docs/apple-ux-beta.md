@@ -3,6 +3,42 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## More room to type, app icon and brief feedback (3580)
+
+On phones and narrow windows, the composer keeps +, the source-aware editor
+and mic/send visible. Emoji/GIFs/stickers, dictation, attachments and round
+video use the existing expandable + tray. Typing closes the tray, while the
+editor, selection, composing range and focus remain mounted. Round video's
+held gesture owns a permanent first tray slot; phone rotation keeps the same
+layout. Attachment picking remains available through the tray's overflow.
+The composer uses tighter 4-pixel outer insets, removes duplicated inner field
+padding and uses a short **Message…** hint; source descriptions remain in
+the source control's tooltip and accessibility label.
+
+The production merged-chat fixture was inspected in
+[dark](ux/apple/composer-input-space-dark.png) and
+[light](ux/apple/composer-input-space-light.png). 100 focused regressions pass,
+including 320/390/430-pixel layouts with 1x/2x text, responsive editor identity,
+clipboard/send paths, recording controls, Undo expiry and brand resources.
+Full analysis has zero errors/warnings and the same 70 pre-existing infos;
+the focused component/test analysis is clean. The strict design-token check
+passes without adding debt.
+
+Merge/unmerge/archive and ordinary copy confirmations last 2.5 seconds.
+Undo snackbars explicitly disable Flutter's action-driven persistence in
+normal navigation; accessible navigation retains the persistent Undo action.
+Errors and deliberately longer recovery prompts keep their own timing.
+
+The Windows iOS builder skips asset catalogs. The existing ChatLoom artwork
+now has opaque RGB iOS catalog slots, explicit PNG resources and matching
+iPhone/iPad icon metadata. iOS uses this app identity for the Home Screen and
+the leading notification icon. Source resource checks pass; physical icon
+caching and notification presentation still need iPhone acceptance. See
+[brand packaging](brand/BRAND.md).
+
+The separate presentation harness still lacks its external source-snapshot
+prerequisite; the captures above use actual production widget fixtures.
+
 ## GIF search input and compact controls (3579)
 
 GIF search previously disabled its entire text field until its provider was

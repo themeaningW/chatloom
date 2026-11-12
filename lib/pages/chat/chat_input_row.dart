@@ -35,7 +35,6 @@ import 'composer_menu.dart';
 import 'composer_recipient_notice.dart';
 import 'composer_send_later.dart';
 import 'conversation_source.dart';
-import 'conversation_source_picker.dart' show ConversationSourceHintHost;
 import 'dictation_dialog.dart';
 import 'input_bar.dart';
 
@@ -253,13 +252,18 @@ class _ChatInputRowState extends State<ChatInputRow> {
   );
 
   /// The composer's "+": the attach menu, unavailable while editing.
-  Widget _attachButton() {
+  Widget _attachButton({VoidCallback? onUsed}) {
     final enabled = controller.composerEnabled && controller.editEvent == null;
     return Builder(
       builder: (anchor) => IconButton(
         tooltip: 'Attach media or a file',
         icon: const Icon(Icons.add),
-        onPressed: enabled ? () => _openAttachMenu(anchor) : null,
+        onPressed: enabled
+            ? () async {
+                await _openAttachMenu(anchor);
+                onUsed?.call();
+              }
+            : null,
       ),
     );
   }
@@ -339,6 +343,42 @@ class _ChatInputRowState extends State<ChatInputRow> {
       selected: controller.showEmojiPicker,
       onPressed: controller.emojiPickerAction,
     ),
+  ];
+
+  /// Keep only +, the editor and mic/send on phones. The existing tray owns
+  /// secondary actions without remounting the editor or recording gestures.
+  List<ComposerAction> _compactActions(({bool voice, bool round}) record) => [
+    if (record.round)
+      ComposerAction(
+        icon: Icons.videocam_outlined,
+        label: 'Round video',
+        collapseOnUse: false,
+        // First so this held gesture always has a visible slot, never an
+        // overflow callback that could lose its pointer on dismissal.
+        anchor: (context, used) => _roundAction(record)!,
+      ),
+    ComposerAction(
+      icon: Icons.attach_file,
+      label: 'Attach media or a file',
+      onPressed: controller.editEvent == null
+          ? () => _openAttachMenu(context)
+          : null,
+      anchor: (context, used) => _attachButton(onUsed: used),
+    ),
+    ComposerAction(
+      icon: controller.showEmojiPicker
+          ? Icons.keyboard
+          : Icons.add_reaction_outlined,
+      label: 'Emoji, GIFs and stickers',
+      selected: controller.showEmojiPicker,
+      onPressed: controller.emojiPickerAction,
+    ),
+    if (record.voice && !_holding)
+      ComposerAction(
+        icon: Icons.edit_note_outlined,
+        label: _polish ? 'Dyktuj wiadomość' : 'Dictate a message',
+        onPressed: _dictationOpen ? null : _openDictation,
+      ),
   ];
 
   /// Round video in this chat, or null outside Telegram and Messenger
@@ -542,81 +582,91 @@ class _ChatInputRowState extends State<ChatInputRow> {
             return NotionReappear(
               trigger: false,
               child: TextFieldTapRegion(
-                child: CompactComposer(
-                  input: InputBar(
-                    room: controller.room,
-                    minLines: 1,
-                    maxLines: conversationComposerMaxLines(
-                      context,
-                      hasContext:
-                          controller.replyEvent != null ||
-                          controller.editEvent != null,
-                    ),
-                    autofocus: !PlatformInfos.isMobile,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction:
-                        AppSettings.sendOnEnter.value && PlatformInfos.isMobile
-                        ? TextInputAction.send
-                        : null,
-                    onSubmitted: controller.onInputBarSubmitted,
-                    onSubmitImage: controller.sendImageFromClipBoard,
-                    focusNode: controller.inputFocus,
-                    controller: controller.sendController,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 6,
-                      ),
-                      counter: const SizedBox.shrink(),
-                      // A merged chat names the network it sends through.
-                      hintText: switch (controller) {
-                        ConversationSourceHintHost(:final composerHint) =>
-                          composerHint,
-                        _ => 'Message…',
-                      },
-                      hintMaxLines: 1,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      filled: false,
-                    ),
-                    onChanged: controller.onInputBarChanged,
-                    suggestionEmojis:
-                        getDefaultEmojiLocale(
-                          AppSettings.emojiSuggestionLocale.value.isNotEmpty
-                              ? Locale(AppSettings.emojiSuggestionLocale.value)
-                              : Localizations.localeOf(context),
-                        ).fold(
-                          [],
-                          (emojis, category) => emojis..addAll(category.emoji),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact =
+                        PlatformInfos.isMobile ||
+                        constraints.maxWidth < NotionSize.composerCompactWidth;
+                    return CompactComposer(
+                      input: InputBar(
+                        room: controller.room,
+                        minLines: 1,
+                        maxLines: conversationComposerMaxLines(
+                          context,
+                          hasContext:
+                              controller.replyEvent != null ||
+                              controller.editEvent != null,
                         ),
-                  ),
-                  addAction: _attachButton(),
-                  inlineActions: _inlineActions(),
-                  actionsEnabled: controller.composerEnabled,
-                  collapseOnText: controller.sendController,
-                  collapseToken: Object.hash(
-                    controller.room.id,
-                    controller.sendingClient.userID,
-                    controller.replyEvent?.eventId,
-                    controller.editEvent?.eventId,
-                    _holding,
-                  ),
-                  inputOverlay: _hold.capturing
-                      // Recording samples tick only the overlay's clock.
-                      ? ListenableBuilder(
-                          listenable: recordingViewModel.samples,
-                          builder: (context, _) => VoiceRecordHoldOverlay(
-                            hold: _hold,
-                            duration: recordingViewModel.elapsed,
+                        autofocus: !PlatformInfos.isMobile,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction:
+                            AppSettings.sendOnEnter.value &&
+                                PlatformInfos.isMobile
+                            ? TextInputAction.send
+                            : null,
+                        onSubmitted: controller.onInputBarSubmitted,
+                        onSubmitImage: controller.sendImageFromClipBoard,
+                        focusNode: controller.inputFocus,
+                        controller: controller.sendController,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 6,
                           ),
-                        )
-                      : null,
-                  source: controller.buildComposerSource(context),
-                  secondaryAction: _roundAction(record),
-                  tertiaryAction: _dictationAction(record),
-                  useCompactActionToolbar: PlatformInfos.platformCanRecord,
-                  primaryAction: _primary(recordingViewModel, record),
+                          counter: const SizedBox.shrink(),
+                          // The adjacent source control already names the
+                          // network in its tooltip and accessibility label.
+                          hintText: 'Message…',
+                          hintMaxLines: 1,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          filled: false,
+                        ),
+                        onChanged: controller.onInputBarChanged,
+                        suggestionEmojis:
+                            getDefaultEmojiLocale(
+                              AppSettings.emojiSuggestionLocale.value.isNotEmpty
+                                  ? Locale(
+                                      AppSettings.emojiSuggestionLocale.value,
+                                    )
+                                  : Localizations.localeOf(context),
+                            ).fold(
+                              [],
+                              (emojis, category) =>
+                                  emojis..addAll(category.emoji),
+                            ),
+                      ),
+                      addAction: _attachButton(),
+                      actions: compact ? _compactActions(record) : null,
+                      inlineActions: compact ? const [] : _inlineActions(),
+                      actionsEnabled: controller.composerEnabled,
+                      collapseOnText: controller.sendController,
+                      collapseToken: Object.hash(
+                        controller.room.id,
+                        controller.sendingClient.userID,
+                        controller.replyEvent?.eventId,
+                        controller.editEvent?.eventId,
+                        _holding,
+                      ),
+                      inputOverlay: _hold.capturing
+                          // Recording samples tick only the overlay's clock.
+                          ? ListenableBuilder(
+                              listenable: recordingViewModel.samples,
+                              builder: (context, _) => VoiceRecordHoldOverlay(
+                                hold: _hold,
+                                duration: recordingViewModel.elapsed,
+                              ),
+                            )
+                          : null,
+                      source: controller.buildComposerSource(context),
+                      secondaryAction: compact ? null : _roundAction(record),
+                      tertiaryAction: compact ? null : _dictationAction(record),
+                      useCompactActionToolbar:
+                          !compact && PlatformInfos.platformCanRecord,
+                      primaryAction: _primary(recordingViewModel, record),
+                    );
+                  },
                 ),
               ),
             );

@@ -5,6 +5,7 @@ import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/pages/chat_details/chat_details.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/personal/ui/person_page.dart';
+import 'package:chatloom/personal/ui/person_sheets.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
 import 'package:chatloom/widgets/matrix.dart';
@@ -202,10 +203,13 @@ void main() {
     expect(personal.values['person-prefs:person']?['routing'], 'fixed');
     expect(personal.groups.single.defaultRoomId, telegram.id);
     // Older builds' group JSON carries no new field.
-    expect(
-      personal.values['person:person']!.keys.toSet(),
-      {'id', 'name', 'members', 'defaultRoomId', 'revision'},
-    );
+    expect(personal.values['person:person']!.keys.toSet(), {
+      'id',
+      'name',
+      'members',
+      'defaultRoomId',
+      'revision',
+    });
 
     // The name of a network, live.
     await tapRow(tester, 'Name');
@@ -240,14 +244,66 @@ void main() {
     expect(find.text('Replace with another chat…'), findsOneWidget);
     await tester.tap(find.text('Remove from merged chat'));
     await tester.pumpAndSettle();
-    expect(
-      personal.groups.single.members.map((m) => m.roomId),
-      [whatsapp.id, signal.id],
-    );
+    expect(personal.groups.single.members.map((m) => m.roomId), [
+      whatsapp.id,
+      signal.id,
+    ]);
     expect(find.text('Left or deleted'), findsNothing);
+    final notice = tester.widget<SnackBar>(find.byType(SnackBar));
+    expect(notice.duration, const Duration(milliseconds: 2500));
+    expect(notice.persist, isFalse);
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
     expect(personal.groups.single.members, hasLength(3));
     expect(tester.takeException(), isNull);
   });
+
+  for (final accessible in [false, true]) {
+    testWidgets(
+      'unmerge notice timeout with accessibleNavigation=$accessible',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: NotionTheme.build(Brightness.dark),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(accessibleNavigation: accessible),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () =>
+                      unmergePerson(context, personal: personal, group: group),
+                  child: const Text('Unmerge fixture'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Unmerge fixture'));
+        await tester.pumpAndSettle();
+        expect(personal.groups, isEmpty);
+        final notice = tester.widget<SnackBar>(find.byType(SnackBar));
+        expect(notice.duration, const Duration(milliseconds: 2500));
+        expect(notice.persist, accessible);
+        await tester.pump(const Duration(milliseconds: 2400));
+        expect(find.text('Chats unmerged'), findsOneWidget);
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pumpAndSettle();
+        if (accessible) {
+          expect(find.text('Chats unmerged'), findsOneWidget);
+          await tester.tap(find.text('Undo'));
+          await tester.pumpAndSettle();
+          expect(personal.groups.single.id, group.id);
+        } else {
+          expect(find.text('Chats unmerged'), findsNothing);
+          expect(find.text('Undo'), findsNothing);
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 }

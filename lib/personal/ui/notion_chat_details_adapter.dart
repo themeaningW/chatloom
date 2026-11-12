@@ -306,6 +306,7 @@ class _NotionLiveChatDetailsState extends State<NotionLiveChatDetails> {
     final archiveEntity = entity;
     final archiveSources = sources;
     final messenger = ScaffoldMessenger.of(context);
+    final keepFeedback = MediaQuery.accessibleNavigationOf(context);
     final archive = !projection.metadataForEntity(archiveEntity).archived;
     var archived = false;
     await _run(
@@ -334,6 +335,8 @@ class _NotionLiveChatDetailsState extends State<NotionLiveChatDetails> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          duration: NotionMotion.feedbackHold,
+          persist: keepFeedback,
           content: Text(archive ? 'Chat archived' : 'Chat unarchived'),
           action: SnackBarAction(
             label: 'Undo',
