@@ -3,6 +3,27 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Full-thread browsing without the long-press preview (3576)
+
+Holding an inbox row or pin opens the compact actions menu again, matching
+upstream `26199cd`; the separate saved-history preview and its **Open chat**
+action have been removed. Labels and the selected inbox sort remain available.
+
+Tap a row normally to browse the complete conversation, including older
+history. With **Settings → Privacy & security → Incognito mode** enabled,
+viewing and scrolling do not automatically send a read receipt. Use the
+conversation's **Mark as read** button when desired; replying may still mark
+messages read on their source network. The privacy policy, read-target logic
+and read button already match this upstream revision and remain unchanged.
+
+90 selected full-app tests pass. The new production inbox regression failed
+before removal and now verifies the compact menu, no saved-history reads and
+unchanged unread state. App analysis has zero errors/warnings and the same
+70 informational findings; the strict design-token no-growth check passes.
+The separate presentation harness could not start because its external
+`docs/notion-ui/SOURCE-SNAPSHOT.json` project prerequisite is unavailable in
+this checkout. It did not produce captures or additional verification.
+
 ## Shake to report (3575)
 
 Shaking the active, unlocked iPhone opens the same **Report a problem** sheet

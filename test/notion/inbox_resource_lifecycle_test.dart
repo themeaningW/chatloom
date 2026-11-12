@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/l10n/l10n.dart';
+import 'package:chatloom/pages/chat_list/chat_actions_menu.dart';
 import 'package:chatloom/pages/chat_list/chat_list.dart';
 import 'package:chatloom/pages/chat_list/chat_list_body.dart';
 import 'package:chatloom/personal/conversation_classification.dart';
@@ -194,6 +195,56 @@ void main() {
     await tester.pumpAndSettle();
     return key.currentState! as _Controller;
   }
+
+  testWidgets(
+    'holding an inbox row opens only the compact actions menu without loading history',
+    (tester) async {
+      final database = _PreviewDatabase();
+      final client = _PreviewClient(database, '@owner:example.invalid');
+      final room = _Room(client, '!held:example.invalid')
+        ..count = 3
+        ..message(r'$latest', 'Latest fictional message');
+      database.events.add(
+        Event(
+          room: room,
+          eventId: r'$older',
+          type: EventTypes.Message,
+          senderId: '@anna:example.invalid',
+          originServerTs: DateTime.utc(2026, 10, 16),
+          content: {
+            'msgtype': MessageTypes.Text,
+            'body': 'Only in saved history',
+          },
+        ),
+      );
+      addTearDown(PersonalClient.of(client).dispose);
+      await mountInbox(tester, client);
+      final beforeReads = database.reads;
+      final beforeMarker = room.fullyRead;
+      await tester.longPress(find.byType(NotionInboxRow));
+      await tester.pumpAndSettle();
+
+      final menu = find.byType(ChatActionsPanel<ChatMenuAction>);
+      expect(menu, findsOneWidget);
+      expect(find.text('Mark as read'), findsOneWidget);
+      expect(find.text('Labels…'), findsOneWidget);
+      expect(find.text('Open chat'), findsNothing);
+      expect(find.text('Preview · stays unread'), findsNothing);
+      expect(find.text('Only in saved history'), findsNothing);
+      expect(database.reads, beforeReads);
+      expect(room.notificationCount, 3);
+      expect(room.fullyRead, beforeMarker);
+      expect(tester.getSize(menu).width, lessThanOrEqualTo(280));
+
+      await tester.tapAt(const Offset(790, 590));
+      await tester.pumpAndSettle();
+      expect(menu, findsNothing);
+      expect(room.notificationCount, 3);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   void sync(_Client client, Iterable<String> roomIds) => client.onSync.add(
     SyncUpdate(

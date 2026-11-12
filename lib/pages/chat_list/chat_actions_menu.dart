@@ -25,7 +25,6 @@ enum InboxSwipeChoice {
 /// "Delete chat…" appears only where the chat's bridge can delete it on the
 /// network (FX-01) and always asks first.
 enum ChatMenuAction {
-  open,
   read,
   unread,
   pin,
@@ -119,7 +118,6 @@ Future<T?> showChatActionsMenu<T extends Object>(
   required String title,
   required List<ChatMenuItem<T>> items,
   Widget? avatar,
-  Widget? preview,
   bool haptic = true,
 }) {
   if (haptic) NotionHaptics.longPress();
@@ -150,14 +148,8 @@ Future<T?> showChatActionsMenu<T extends Object>(
         padding: MediaQuery.paddingOf(context),
         below: below,
         centred: centred,
-        withPreview: preview != null,
       ),
-      child: ChatActionsPanel<T>(
-        title: title,
-        avatar: avatar,
-        items: items,
-        preview: preview,
-      ),
+      child: ChatActionsPanel<T>(title: title, avatar: avatar, items: items),
     ),
   );
 }
@@ -167,13 +159,11 @@ class _ChatMenuLayout extends SingleChildLayoutDelegate {
   final EdgeInsets padding;
   final bool below;
   final bool centred;
-  final bool withPreview;
   const _ChatMenuLayout({
     required this.anchor,
     required this.padding,
     required this.below,
     this.centred = false,
-    this.withPreview = false,
   });
 
   static const _maxWidth = 280.0;
@@ -183,10 +173,7 @@ class _ChatMenuLayout extends SingleChildLayoutDelegate {
       BoxConstraints(
         maxWidth: math.max(
           0,
-          math.min(
-            withPreview ? NotionSize.sheetDialogMaxWidth : _maxWidth,
-            constraints.maxWidth - 2 * NotionSpace.md,
-          ),
+          math.min(_maxWidth, constraints.maxWidth - 2 * NotionSpace.md),
         ),
         maxHeight: math.max(
           0,
@@ -221,21 +208,18 @@ class _ChatMenuLayout extends SingleChildLayoutDelegate {
       old.anchor != anchor ||
       old.padding != padding ||
       old.below != below ||
-      old.withPreview != withPreview ||
       old.centred != centred;
 }
 
 class ChatActionsPanel<T extends Object> extends StatelessWidget {
   final String title;
   final Widget? avatar;
-  final Widget? preview;
   final List<ChatMenuItem<T>> items;
   const ChatActionsPanel({
     super.key,
     required this.title,
     required this.items,
     this.avatar,
-    this.preview,
   });
 
   @override
@@ -284,10 +268,6 @@ class ChatActionsPanel<T extends Object> extends StatelessWidget {
                   ),
                 ),
                 const NotionGlassDivider(vertical: false),
-                if (preview != null) ...[
-                  preview!,
-                  const NotionGlassDivider(vertical: false),
-                ],
                 for (final item in items) _ChatMenuRow<T>(item: item),
               ],
               rise: NotionMotion.rise / 2,

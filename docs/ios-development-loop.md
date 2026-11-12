@@ -69,8 +69,12 @@ publish a TestFlight build automatically.
 - Edge back: partial drag then cancel, then a completed drag. Input and scroll
   position should survive cancellation; a modal or protected action must win.
 - Conversation scroll dismisses the iOS keyboard and keeps the unsent draft.
-- Swipe-to-reply, double-tap reaction and long-press remain available alongside
-  visible controls. Long-press preview must not send a read receipt.
+- Swipe-to-reply, double-tap reaction and message long-press remain available
+  alongside visible controls. Holding an inbox row opens its actions menu only.
+- For full-thread browsing without automatic read receipts, enable
+  **Settings → Privacy & security → Incognito mode** and open the conversation
+  normally. **Mark as read** explicitly sends the receipt; simply viewing or
+  scrolling does not. Replying may mark messages read on the source network.
 - Check sheet drag-dismiss, media drag-dismiss and pinch zoom on actual content.
 - Test **Settings → Accessibility → Motion → Reduce Motion** both ways. Page
   movement should disappear when enabled. Also check large text and VoiceOver.

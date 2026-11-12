@@ -15,7 +15,6 @@ import 'package:chatloom/pages/chat_list/chat_list_item.dart'
 import 'package:chatloom/pages/chat_list/chat_list_view.dart';
 import 'package:chatloom/pages/chat_list/inbox_controller.dart';
 import 'package:chatloom/pages/chat_list/inbox_keyboard_navigation.dart';
-import 'package:chatloom/pages/chat_list/room_thread_preview.dart';
 import 'package:chatloom/personal/bridge_contact_search.dart'
     show BridgeDirectory;
 import 'package:chatloom/personal/chat_labels.dart';
@@ -820,8 +819,6 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
     final projection = InboxProjection(owner);
     final l10n = L10n.of(context);
     final title = projection.displayName(room);
-    final group = projection.groupFor(room);
-    final sources = group == null ? [room] : projection.activeSourcesOf(group);
     Widget avatar() => notionInboxAvatar(
       owner,
       InboxProjection(owner),
@@ -833,23 +830,13 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
       anchor: anchor,
       title: title,
       avatar: avatar(),
-      preview: RoomThreadPreview(
-        sources: sources,
-        isCurrent: () => _sameInbox(owner, account),
-        changes: owner,
-        sourceLabel: (source) =>
-            notionNetworkLabel(projection.classifier.classify(source).network),
+      items: chatMenuItems(
+        owner,
+        room,
+        pinLabel: l10n.pin,
+        unpinLabel: l10n.unpin,
+        sort: inboxSort,
       ),
-      items: [
-        const ChatMenuItem(ChatMenuAction.open, Icons.open_in_new, 'Open chat'),
-        ...chatMenuItems(
-          owner,
-          room,
-          pinLabel: l10n.pin,
-          unpinLabel: l10n.unpin,
-          sort: inboxSort,
-        ),
-      ],
     );
     if (action == null || !mounted) return;
     if (!_sameInbox(owner, account) || !identical(room.client, owner.client)) {
@@ -860,9 +847,6 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
     switch (action) {
       case ChatMenuAction.labels:
         await showChatLabelPicker(context, owner, room);
-        return;
-      case ChatMenuAction.open:
-        await onChatTap(room);
         return;
       case ChatMenuAction.read:
       case ChatMenuAction.unread:
