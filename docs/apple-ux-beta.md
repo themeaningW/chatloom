@@ -24,6 +24,13 @@ The separate presentation harness could not start because its external
 `docs/notion-ui/SOURCE-SNAPSHOT.json` project prerequisite is unavailable in
 this checkout. It did not produce captures or additional verification.
 
+The Windows xcross release of `ff8bb0f` completed as **2.10.0 (3576)**.
+Bundle metadata, removal of the old preview from AOT and retention of Incognito,
+manual read controls, private bridge configuration, notification and shake
+hooks were verified. The artifact has not been installed on the physical
+iPhone. Native device acceptance and Swift/Xcode compilation remain separate;
+the existing dSYM and CocoaPods-only Share plugin limitations are unchanged.
+
 ## Shake to report (3575)
 
 Shaking the active, unlocked iPhone opens the same **Report a problem** sheet
