@@ -9,13 +9,17 @@ import 'dart:ui' as ui;
 import 'package:chatloom/pages/chat/conversation_source.dart';
 import 'package:chatloom/personal/privacy.dart';
 import 'package:chatloom/personal/round_video/round_playback_coordinator.dart';
+import 'package:chatloom/personal/stickers/composer_panel.dart';
 import 'package:chatloom/personal/stickers/gif_result_tile.dart';
 import 'package:chatloom/personal/stickers/gif_search.dart';
 import 'package:chatloom/personal/stickers/online_gif_panel.dart';
 import 'package:chatloom/personal/stickers/public_gif_search.dart';
+import 'package:chatloom/personal/stickers/sticker_panel.dart';
+import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
-import 'package:flutter/services.dart' show FontLoader, rootBundle;
+import 'package:flutter/services.dart'
+    show FontLoader, MethodChannel, TextInputAction, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -127,7 +131,6 @@ class _Player extends VideoPlayerPlatform {
 
 void main() {
   setUpAll(() async {
-    if (Platform.environment['CHATLOOM_KLIPY_CAPTURE_DIR'] == null) return;
     final text = FontLoader('Roboto');
     for (final weight in ['Regular', 'Medium', 'Bold']) {
       text.addFont(rootBundle.load('assets/notion/fonts/Roboto-$weight.ttf'));
@@ -477,6 +480,7 @@ void main() {
       RepaintBoundary(
         key: const ValueKey('capture-klipy'),
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           theme: NotionTheme.build(Brightness.dark),
           builder: (_, child) => MediaQuery(
             data: const MediaQueryData(
@@ -643,6 +647,285 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  for (final provider in GifProvider.values) {
+    testWidgets(
+      'unconfigured $provider accepts and keeps typing without an API request',
+      (tester) async {
+        var requests = 0;
+        final source = PublicGifSearch(
+          apiKey: '',
+          provider: provider,
+          client: MockClient((_) async {
+            requests++;
+            return _page([]);
+          }),
+        );
+        addTearDown(source.dispose);
+        await tester.pumpWidget(app(source));
+        await tester.pumpAndSettle();
+        final field = find.byKey(const ValueKey('klipy-search'));
+        await tester.tap(field);
+        await tester.pump();
+        expect(tester.testTextInput.isVisible, isTrue);
+        tester.testTextInput.enterText('cat');
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(tester.widget<TextField>(field).controller!.text, 'cat');
+        expect(requests, 0);
+        expect(find.text('Set up ${source.label}'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  for (final brightness in Brightness.values) {
+    testWidgets('compact GIF controls in ${brightness.name}', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final source = PublicGifSearch(
+        apiKey: 'fictional-key',
+        client: MockClient((_) async => _page([])),
+      );
+      addTearDown(source.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: NotionTheme.build(brightness),
+          home: RepaintBoundary(
+            key: const ValueKey('capture-compact-gifs'),
+            child: Scaffold(
+              appBar: AppBar(title: const Text('Fictional chat')),
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: SizedBox(
+                  height: 360,
+                  child: OnlineGifPanel(
+                    host: _Host(room),
+                    source: source,
+                    loadCredentials: false,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final label in ['KLIPY', 'GIFs', 'Clips']) {
+        final pill = find.ancestor(
+          of: find.text(label),
+          matching: find.byType(NotionGlassPill),
+        );
+        final surface = find.descendant(
+          of: pill,
+          matching: find.byType(NotionGlassSurface),
+        );
+        expect(tester.getSize(pill).height, 48);
+        expect(tester.getSize(surface).height, 36);
+      }
+      final directory = Platform.environment['CHATLOOM_KLIPY_CAPTURE_DIR'];
+      if (directory != null) {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('capture-compact-gifs')),
+        );
+        await tester.runAsync(() async {
+          final image = await boundary.toImage(pixelRatio: 2);
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          final file = File('$directory/gif-controls-${brightness.name}.png');
+          await file.parent.create(recursive: true);
+          await file.writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+      final clips = find.ancestor(
+        of: find.text('Clips'),
+        matching: find.byType(NotionGlassPill),
+      );
+      final rect = tester.getRect(clips);
+      await tester.tapAt(Offset(rect.center.dx, rect.top + 1));
+      await tester.pumpAndSettle();
+      expect(source.kind, GifSearchKind.clips);
+      await tester.tap(find.text('KLIPY'));
+      await tester.pumpAndSettle();
+      expect(find.text('GIF source'), findsOneWidget);
+      await tester.tap(find.text('GIPHY'));
+      await tester.pumpAndSettle();
+      expect(source.provider, GifProvider.giphy);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  for (final expired in [false, true]) {
+    testWidgets(
+      'provider setup resumes only a current query: expired=$expired',
+      (tester) async {
+        const channel = MethodChannel(
+          'plugins.it_nomads.com/flutter_secure_storage',
+        );
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          (_) async => null,
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            channel,
+            null,
+          ),
+        );
+        final requests = <String>[];
+        final source = PublicGifSearch(
+          apiKey: '',
+          client: MockClient((request) async {
+            requests.add(request.url.toString());
+            return _page([]);
+          }),
+        );
+        addTearDown(source.dispose);
+        await tester.pumpWidget(app(source));
+        await tester.enterText(
+          find.byKey(const ValueKey('klipy-search')),
+          'cat',
+        );
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(requests, isEmpty);
+        if (expired) {
+          PersonalPrivacy.surfaceUnlocked = false;
+          PersonalPrivacy.surfaceUnlocked = true;
+        }
+        await source.setKey('fictional-key');
+        await tester.pumpAndSettle();
+        if (expired) {
+          expect(requests, isEmpty);
+          await tester.testTextInput.receiveAction(TextInputAction.search);
+          await tester.pumpAndSettle();
+        }
+        expect(requests, hasLength(1));
+        expect(requests.single, contains('cat'));
+        expect(
+          tester
+              .widget<TextField>(find.byKey(const ValueKey('klipy-search')))
+              .controller!
+              .text,
+          'cat',
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  for (final size in [const Size(390, 844), const Size(320, 640)]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets(
+        'GIF typing survives the keyboard in the full composer at $size / $scale',
+        (tester) async {
+          ComposerKeyboardMetrics.reset();
+          StickerPanel.debugResetTab(StickerPanelTab.gifs);
+          final input = FocusNode();
+          final panelSearch = FocusNode();
+          final scope = FocusScopeNode();
+          final draft = TextEditingController(text: 'Preserved draft');
+          addTearDown(() {
+            input.dispose();
+            panelSearch.dispose();
+            scope.dispose();
+            draft.dispose();
+            StickerPanel.debugResetTab();
+          });
+          final requests = <String>[];
+          final source = PublicGifSearch(
+            apiKey: 'fictional-key',
+            client: MockClient((request) async {
+              requests.add(request.url.toString());
+              return _page([]);
+            }),
+          );
+          addTearDown(source.dispose);
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = size;
+          tester.view.viewPadding = const FakeViewPadding(top: 44, bottom: 34);
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: NotionTheme.build(
+                Brightness.dark,
+              ).copyWith(platform: TargetPlatform.iOS),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: Scaffold(
+                appBar: AppBar(title: const Text('Fictional chat')),
+                body: Column(
+                  children: [
+                    const Expanded(child: SizedBox()),
+                    TextField(
+                      key: const ValueKey('draft'),
+                      focusNode: input,
+                      controller: draft,
+                    ),
+                    ComposerPanelSlot(
+                      visible: true,
+                      inputFocus: input,
+                      searchFocus: scope,
+                      softKeyboard: true,
+                      builder: (context, height) => FocusScope(
+                        node: scope,
+                        child: StickerPanel(
+                          host: _Host(room),
+                          searchFocus: panelSearch,
+                          gifSource: source,
+                          loadGifCredentials: false,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final field = find.byKey(const ValueKey('klipy-search'));
+          final state = tester.state(find.byType(OnlineGifPanel));
+          await tester.tap(field);
+          await tester.pump();
+          tester.testTextInput.enterText('ca');
+          for (final inset in [300.0, 260.0, 300.0]) {
+            tester.view.viewInsets = FakeViewPadding(bottom: inset);
+            await tester.pump(const Duration(milliseconds: 40));
+            expect(tester.takeException(), isNull);
+            expect(panelSearch.hasFocus, isTrue);
+          }
+          await tester.pumpAndSettle();
+          expect(tester.state(find.byType(OnlineGifPanel)), same(state));
+          expect(tester.testTextInput.isVisible, isTrue);
+          tester.testTextInput.enterText('cat');
+          await tester.pump(const Duration(milliseconds: 400));
+          await tester.pumpAndSettle();
+          expect(tester.widget<TextField>(field).controller!.text, 'cat');
+          expect(requests.last, contains('cat'));
+          expect(draft.text, 'Preserved draft');
+          final inputRect = tester.getRect(field);
+          expect(inputRect.bottom, lessThanOrEqualTo(size.height - 300));
+          await tester.testTextInput.receiveAction(TextInputAction.search);
+          await tester.pump();
+          tester.view.viewInsets = const FakeViewPadding();
+          await tester.pumpAndSettle();
+          expect(panelSearch.hasFocus, isFalse);
+          expect(find.text('Clips'), findsOneWidget);
+          expect(tester.state(find.byType(OnlineGifPanel)), same(state));
+          expect(tester.widget<TextField>(field).controller!.text, 'cat');
+          expect(draft.text, 'Preserved draft');
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump();
+        },
+      );
+    }
+  }
+
   testWidgets('debounces typing, shows results and searches clips separately', (
     tester,
   ) async {
@@ -663,6 +946,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(paths, hasLength(1));
     expect(find.byType(GifResultTile), findsOneWidget);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Clips'));
     await tester.pumpAndSettle();
     expect(paths.last, endsWith('/clips/search'));

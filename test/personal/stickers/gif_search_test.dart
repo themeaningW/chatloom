@@ -440,7 +440,9 @@ void main() {
       searchFocus: focus,
     );
 
-    testWidgets('unavailable: the field is off and says why', (tester) async {
+    testWidgets('unavailable source keeps typing local and explains setup', (
+      tester,
+    ) async {
       source.current = const GifSearchAvailability.disabled(
         'Search GIFs via Telegram',
         'Sign in to Telegram to search GIFs.',
@@ -452,10 +454,17 @@ void main() {
       final field = tester.widget<TextField>(
         find.byKey(const ValueKey('gif-search-field')),
       );
-      expect(field.enabled, isFalse);
+      expect(field.enabled, isNot(false));
+      await tester.tap(find.byKey(const ValueKey('gif-search-field')));
+      await tester.pump();
+      expect(tester.testTextInput.isVisible, isTrue);
+      tester.testTextInput.enterText('cat');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(field.controller!.text, 'cat');
+      expect(source.searches, isEmpty);
       expect(find.text('No saved GIFs yet'), findsOneWidget);
 
-      // A login appears: the field turns on without a rebuild from outside.
+      // A login appears: the query is retained and can now be submitted.
       source
         ..current = const GifSearchAvailability.enabled(
           'Search GIFs via Telegram',
@@ -466,8 +475,11 @@ void main() {
         tester
             .widget<TextField>(find.byKey(const ValueKey('gif-search-field')))
             .enabled,
-        isTrue,
+        isNot(false),
       );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(source.searches.first.$1, 'cat');
     });
 
     testWidgets('the privacy note shows while the empty field has focus', (

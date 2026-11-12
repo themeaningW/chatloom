@@ -9,7 +9,7 @@ import 'package:chatloom/personal/privacy.dart';
 import 'package:chatloom/personal/round_video/round_playback_coordinator.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:matrix/matrix.dart';
+import 'package:matrix/matrix.dart' hide Visibility;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
@@ -61,7 +61,9 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
   String? _error;
   bool _busy = false, _saved = false;
   bool _previewing = false;
+  bool _searchFocused = false;
   int _generation = 0;
+  int? _querySurface;
   Timer? _typing;
 
   @override
@@ -90,6 +92,14 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
       _busy = false;
       _error = null;
     });
+    if (!_saved &&
+        _query.text.trim().isNotEmpty &&
+        _querySurface == PersonalPrivacy.surfaceGeneration &&
+        _source.configured &&
+        TickerMode.valuesOf(context).enabled &&
+        ModalRoute.of(context)?.isCurrent != false) {
+      unawaited(_search());
+    }
   }
 
   @override
@@ -99,6 +109,7 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
       _typing?.cancel();
       _generation++;
       _query.clear();
+      _querySurface = null;
       _results = const [];
       _next = null;
       _error = null;
@@ -121,6 +132,7 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
       PersonalPrivacy.surfaceUnlocked && PersonalPrivacy.surfaceForeground;
 
   void _typed(String value) {
+    _querySurface = PersonalPrivacy.surfaceGeneration;
     _typing?.cancel();
     // Invalidate now, not after the debounce, so an older response cannot win.
     _generation++;
@@ -138,7 +150,13 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
 
   Future<void> _search({bool more = false}) async {
     _typing?.cancel();
-    if (!_unlocked || !_source.configured || _query.text.trim().isEmpty) return;
+    if (!_unlocked ||
+        _saved ||
+        !TickerMode.valuesOf(context).enabled ||
+        !_source.configured ||
+        _query.text.trim().isEmpty) {
+      return;
+    }
     if (more && (_busy || _next == null)) return;
     final generation = ++_generation;
     final surface = PersonalPrivacy.surfaceGeneration;
@@ -349,73 +367,74 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NotionSpace.xs,
-                  ),
-                  child: NotionChoicePill<GifProvider>(
-                    title: 'GIF source',
-                    value: _source.provider,
-                    neutral: GifProvider.klipy,
-                    onChanged: _selectProvider,
-                    options: const [
-                      NotionChoice(GifProvider.klipy, 'KLIPY'),
-                      NotionChoice(GifProvider.giphy, 'GIPHY'),
-                    ],
+        Visibility(
+          visible: !_searchFocused,
+          maintainState: true,
+          child: Row(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NotionSpace.xs,
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          NotionChoicePill<GifProvider>(
+                            compact: true,
+                            title: 'GIF source',
+                            value: _source.provider,
+                            neutral: GifProvider.klipy,
+                            onChanged: _selectProvider,
+                            options: const [
+                              NotionChoice(GifProvider.klipy, 'KLIPY'),
+                              NotionChoice(GifProvider.giphy, 'GIPHY'),
+                            ],
+                          ),
+                          if (_source.provider == GifProvider.klipy && !_saved)
+                            for (final kind in GifSearchKind.values)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: NotionSpace.xs,
+                                ),
+                                child: NotionGlassPill(
+                                  compact: true,
+                                  label: kind == GifSearchKind.gifs
+                                      ? 'GIFs'
+                                      : 'Clips',
+                                  selected: _source.kind == kind,
+                                  onPressed: () => _select(kind),
+                                ),
+                              ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            NotionIconButton(
-              icon: Icons.bookmark_outline,
-              label: 'Saved GIFs and Telegram',
-              onPressed: () {
-                _typing?.cancel();
-                _generation++;
-                setState(() {
-                  _saved = !_saved;
-                  _busy = false;
-                });
-              },
-            ),
-            NotionIconButton(
-              icon: Icons.settings_outlined,
-              label: '${_source.label} settings',
-              onPressed: _configure,
-            ),
-          ],
-        ),
-        if (_source.provider == GifProvider.klipy && !_saved)
-          Row(
-            children: [
-              const SizedBox(width: NotionSpace.xs),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final kind in GifSearchKind.values)
-                        Padding(
-                          padding: const EdgeInsets.only(right: NotionSpace.xs),
-                          child: NotionGlassPill(
-                            label: kind == GifSearchKind.gifs
-                                ? 'GIFs'
-                                : 'Clips',
-                            selected: !_saved && _source.kind == kind,
-                            onPressed: () => _select(kind),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+              NotionIconButton(
+                icon: Icons.bookmark_outline,
+                label: 'Saved GIFs and Telegram',
+                onPressed: () {
+                  _typing?.cancel();
+                  _generation++;
+                  setState(() {
+                    _saved = !_saved;
+                    _busy = false;
+                  });
+                },
+              ),
+              NotionIconButton(
+                icon: Icons.settings_outlined,
+                label: '${_source.label} settings',
+                onPressed: _configure,
               ),
             ],
           ),
+        ),
         if (_saved)
           Expanded(
             child: GifTab(
@@ -427,28 +446,38 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
         else ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: NotionSpace.xs),
-            child: TextField(
-              key: const ValueKey('klipy-search'),
-              controller: _query,
-              focusNode: widget.searchFocus,
-              enabled: _source.configured,
-              textInputAction: TextInputAction.search,
-              onChanged: _typed,
-              onSubmitted: (_) => unawaited(_search()),
-              decoration: InputDecoration(
-                hintText: _source.hint,
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _busy
-                    ? const NotionDelayedSpinner(size: NotionSize.iconSm)
-                    : NotionIconButton(
-                        icon: Icons.close,
-                        label: 'Clear search',
-                        onPressed: () {
-                          _query.clear();
-                          _typed('');
-                        },
-                      ),
-                helperMaxLines: 2,
+            child: Focus(
+              canRequestFocus: false,
+              skipTraversal: true,
+              onFocusChange: (focused) {
+                if (mounted && focused != _searchFocused) {
+                  setState(() => _searchFocused = focused);
+                }
+              },
+              child: TextField(
+                key: const ValueKey('klipy-search'),
+                controller: _query,
+                focusNode: widget.searchFocus,
+                style: context.notion.typography.callout,
+                textInputAction: TextInputAction.search,
+                onChanged: _typed,
+                onSubmitted: (_) => unawaited(_search()),
+                decoration: InputDecoration(
+                  hintText: _source.hint,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _busy
+                      ? const NotionDelayedSpinner(size: NotionSize.iconSm)
+                      : NotionIconButton(
+                          icon: Icons.close,
+                          label: 'Clear search',
+                          onPressed: () {
+                            _query.clear();
+                            _typed('');
+                          },
+                        ),
+                  helperMaxLines: 2,
+                ),
               ),
             ),
           ),
@@ -481,6 +510,7 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
           title: _source.provider == GifProvider.giphy
               ? 'GIFs'
               : 'GIFs & clips',
+          message: 'Set up ${_source.label} to load results.',
           action: NotionButton.ghost(
             label: 'Set up ${_source.label}',
             onPressed: _configure,

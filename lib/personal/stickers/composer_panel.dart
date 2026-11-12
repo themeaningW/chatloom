@@ -141,7 +141,13 @@ class _ComposerPanelSlotState extends State<ComposerPanelSlot>
   double? _contentHeight;
 
   bool get _soft => widget.softKeyboard ?? PlatformInfos.isMobile;
-  bool get _searching => widget.searchFocus?.hasFocus ?? false;
+  bool get _searching {
+    final focus = widget.searchFocus;
+    // Dismissing a field can return primary focus to the panel's scope.
+    // That empty scope has no keyboard search and needs the full panel.
+    if (focus is FocusScopeNode && focus.hasPrimaryFocus) return false;
+    return focus?.hasFocus ?? false;
+  }
 
   @override
   void initState() {

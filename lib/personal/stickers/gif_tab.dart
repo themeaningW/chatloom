@@ -421,7 +421,6 @@ class _GifTabState extends State<GifTab> {
               key: const ValueKey('gif-search-field'),
               controller: _query,
               focusNode: widget.searchFocus,
-              enabled: availability.enabled,
               textInputAction: TextInputAction.search,
               onSubmitted: _submitted,
               onChanged: _typed,

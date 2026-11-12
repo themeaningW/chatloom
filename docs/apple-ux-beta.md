@@ -3,6 +3,34 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## GIF search input and compact controls (3579)
+
+GIF search previously disabled its entire text field until its provider was
+configured. Both public sources and the saved/Telegram panel now accept local
+typing while unavailable. Requests still require a configured/available source.
+Public search keeps the query through setup and resumes it only on an active
+panel in the same unlocked privacy session.
+
+The source and GIFs/Clips pills share one horizontal scroll strip with a
+36-pixel visible surface and complete 48-pixel tap target. Search focus hides
+this strip and the bottom tabs in the same frame as keyboard resizing; the
+mounted search, focus and composer draft survive. The keyboard's **Search**
+action restores the controls; an empty focus scope no longer leaves the panel
+stuck at its compact search height. Fixtures were inspected in
+[dark](ux/apple/gif-controls-dark.png) and
+[light](ux/apple/gif-controls-light.png).
+
+54 focused regressions pass, including the original disabled-input reproduction,
+both unconfigured public sources, provider setup, stale privacy sessions,
+320/390-pixel full-composer keyboard resizing at 1x/2x text, padded pill taps,
+provider switching, search/send and saved GIFs. No real provider request or
+message was sent. Physical iPhone keyboard, provider search and playback
+acceptance remain pending. Full analysis has zero errors/warnings, with 70
+existing informational findings elsewhere; final changed-file analysis is
+clean and the strict design-token check passes. The separate presentation
+harness cannot start without its external source-snapshot prerequisite;
+production widget fixtures supplied the captures instead.
+
 ## Pull-down search and compact filters (3578)
 
 Search starts hidden above the inbox content. Pull the list down from its top

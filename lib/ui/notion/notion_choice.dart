@@ -134,6 +134,7 @@ class NotionPickerRow<T> extends StatelessWidget {
 /// A filter pill showing the current choice ("All networks ▾"); selected
 /// while it differs from [neutral]. A tap opens [showNotionChoiceSheet].
 class NotionChoicePill<T> extends StatelessWidget {
+  final bool compact;
   final String title;
   final T value;
   final T neutral;
@@ -148,12 +149,14 @@ class NotionChoicePill<T> extends StatelessWidget {
     required this.options,
     this.onChanged,
     this.icon,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final onChanged = this.onChanged;
     return NotionGlassPill(
+      compact: compact,
       icon: icon,
       label: _labelOf(options, value) ?? title,
       selected: value != neutral,

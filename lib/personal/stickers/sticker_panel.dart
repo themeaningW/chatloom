@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'notion_emoji_picker.dart';
 import 'online_gif_panel.dart';
+import 'public_gif_search.dart';
 import 'sticker_library.dart';
 import 'sticker_tab.dart';
 
@@ -38,6 +39,8 @@ class StickerPanel extends StatefulWidget {
     required this.host,
     this.searchFocus,
     this.library,
+    @visibleForTesting this.gifSource,
+    @visibleForTesting this.loadGifCredentials = true,
   });
 
   final ConversationComposerHost host;
@@ -45,6 +48,8 @@ class StickerPanel extends StatefulWidget {
   /// Focus node for the search fields of the GIF and sticker tabs.
   final FocusNode? searchFocus;
   final StickerLibrary? library;
+  final PublicGifSearch? gifSource;
+  final bool loadGifCredentials;
 
   static const _tabKey = 'pl.personal.composer.panel_tab';
   static StickerPanelTab? _lastTab;
@@ -161,6 +166,8 @@ class _StickerPanelState extends State<StickerPanel>
     StickerPanelTab.emoji => ComposerEmojiTab(host: widget.host),
     StickerPanelTab.gifs => OnlineGifPanel(
       host: widget.host,
+      source: widget.gifSource,
+      loadCredentials: widget.loadGifCredentials,
       searchFocus: _gifSearch,
       library: widget.library,
     ),
@@ -235,9 +242,11 @@ class _StickerPanelState extends State<StickerPanel>
               child: tabs,
             ),
           ),
-          NotionSizeReveal(
+          // Give the keyboard search its space in the same frame as the slot
+          // shrinks. Animating this height briefly overflowed small phones.
+          Visibility(
             visible: !_searchFocused,
-            duration: NotionMotion.short,
+            maintainState: true,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: colors.border)),

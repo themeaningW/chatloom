@@ -9,10 +9,19 @@ sound; GIFs use the existing bridge GIF/ordinary-video adaptation. Preview
 sound starts muted and can be enabled explicitly. The bookmark opens saved
 GIFs and the existing Telegram-based search.
 
+The source and GIFs/Clips controls share one horizontally scrollable row of
+compact pills (36-pixel surface, full 48-pixel tap target). While the search
+field has focus, this row and the bottom tab strip give their space to the
+keyboard/results without remounting the search or clearing the composer draft.
+The keyboard's Search action dismisses it and restores those controls.
+
 ## Configuration
 
 Each provider requires its own application API key. Without one, the panel
-shows Set up KLIPY/GIPHY and makes no provider request. Select the source, open
+shows Set up KLIPY/GIPHY and makes no provider request. The search field remains
+editable and keeps the query; completing setup resumes it if the panel is still
+active and its privacy session is current. Saved/Telegram search also accepts
+local typing while its provider is unavailable. Select the source, open
 the panel's settings button, obtain a key through the linked
 [KLIPY documentation](https://docs.klipy.com/) or
 [GIPHY dashboard](https://developers.giphy.com/dashboard/), and
