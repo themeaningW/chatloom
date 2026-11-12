@@ -179,6 +179,12 @@ and warnings (70 existing informational findings), and the design-token
 no-growth check passes. Tests use fictional responses and a fake player;
 they do not establish live provider approval, real search or iPhone playback.
 
+The Windows xcross release build of `2917575` completed as **2.10.0 (3572)**.
+Bundle metadata, both providers, both official GIPHY attribution assets, the
+private bridge endpoint and notification delegate inclusion were verified.
+This artifact is ready for the existing installer; it has not been installed
+or tested on the physical iPhone. The known dSYM/Share extension limits remain.
+
 ## Rendered examples
 
 Rendered examples:
