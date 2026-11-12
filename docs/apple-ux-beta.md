@@ -31,6 +31,12 @@ changed-file analysis is clean and the strict design-token check passes.
 The separate presentation harness still lacks its external source-snapshot
 prerequisite; full-app production presenter fixtures supplied the captures.
 
+The Windows xcross release of `9cc3e4b` completed as **2.10.0 (3581)**.
+Bundle metadata, all 14 icon PNGs, the bridge endpoint and retained notification,
+shake/report features were verified. This artifact has not been installed on
+the physical iPhone. Swift/Xcode compilation remains unverified here; the
+existing dSYM and CocoaPods-only Share plugin limitations remain.
+
 ## More room to type, app icon and brief feedback (3580)
 
 On phones and narrow windows, the composer keeps +, the source-aware editor
