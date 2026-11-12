@@ -62,7 +62,10 @@ class _NotionInboxDockState extends State<NotionInboxDock> {
     setState(() => _expanded = true);
     await showNotionNetworkSelector(
       context,
-      anchor: box.localToGlobal(Offset.zero) & box.size,
+      anchor: Rect.fromPoints(
+        box.localToGlobal(Offset.zero),
+        box.localToGlobal(box.size.bottomRight(Offset.zero)),
+      ),
       networks: widget.networks,
       selected: widget.selectedNetwork,
       onSelected: widget.onNetworkSelected,

@@ -335,6 +335,12 @@ abstract interface class BridgeProvisioningTransport {
   );
 }
 
+/// Provisioning endpoints advertised by the user's Matrix server, including
+/// bridges that have not created a room on this account yet.
+abstract interface class BridgeProvisioningDiscovery {
+  Future<List<BridgeEndpoint>> discover({bool force = false});
+}
+
 /// The bridgev2 provisioning endpoints the search uses. Every call is
 /// explicit: nothing here runs while the user only types.
 class BridgeProvisioningApi {

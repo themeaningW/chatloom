@@ -138,6 +138,26 @@ Mac testers can use [the Xcode installation guide](ios-beta-install.md), with
 `feat/apple-ux-paste-beta` as the branch in its clone command. A standard
 Mac/Xcode build of this revision has not been run here.
 
+## Network filter and contact search follow-up (3571)
+
+The network picker now opens below a header or above a bottom dock, remains
+inside safe screen bounds, and scrolls when its options exceed available space.
+Search includes old Archive/Aside rooms and can submit name searches to
+supported connected bridges from the keyboard. Self-hosted accounts can use
+advertised bridgev2 endpoints, including bridges with no existing room.
+
+See [contact search and self-host configuration](bridge-contact-search.md) for
+network limits and the required server publication or build-time override.
+The local Windows installer preserves the existing private server defines.
+
+Verification: 120 focused unit/widget regressions pass, app and changed-test
+analysis has zero errors/warnings (70 existing informational findings), and
+the design-token no-growth check passes. Production-widget captures were
+inspected at 390/DPR3 and 320/large text; these use fictional data and Windows
+fallback fonts, not physical iPhone screenshots. Live read-only checks reached
+the private Matrix API and all three authenticated provisioning routes. Real
+network search results still require signed-in device acceptance.
+
 ## Rendered examples
 
 Rendered examples:

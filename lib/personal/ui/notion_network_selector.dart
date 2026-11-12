@@ -148,7 +148,8 @@ class _NetworkGlyphPainter extends CustomPainter {
       oldDelegate.background != background;
 }
 
-/// Production selector; the modal route's barrier consumes the outside tap.
+/// Production selector; [anchor] is in global logical coordinates. The modal
+/// route's barrier consumes the outside tap.
 Future<String?> showNotionNetworkSelector(
   BuildContext context, {
   required Rect anchor,
@@ -160,14 +161,20 @@ Future<String?> showNotionNetworkSelector(
   VoidCallback? onManageNetworks,
   VoidCallback? onMarkAllRead,
 }) {
-  // Grow from the dock pill: the reveal origin is the middle of the pill's
-  // top edge, in the root navigator's coordinates (the same space as
-  // [anchor]).
-  final root = Navigator.of(context, rootNavigator: true).context;
-  final window =
-      (root.findRenderObject() as RenderBox?)?.size ??
-      MediaQuery.sizeOf(context);
-  final origin = Offset(anchor.center.dx, anchor.top);
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final overlay = navigator.overlay?.context.findRenderObject() as RenderBox?;
+  final window = overlay?.size ?? MediaQuery.sizeOf(context);
+  // The inbox header and the legacy bottom dock both provide global anchors.
+  // Convert both corners into the same overlay space used to lay out the menu;
+  // a navigator may itself be offset or scaled inside a desktop/tablet pane.
+  final rect = overlay == null
+      ? anchor
+      : Rect.fromPoints(
+          overlay.globalToLocal(anchor.topLeft),
+          overlay.globalToLocal(anchor.bottomRight),
+        );
+  final fromTop = rect.center.dy < window.height / 2;
+  final origin = Offset(rect.center.dx, fromTop ? rect.bottom : rect.top);
   return showNotionPopover<String>(
     context: context,
     alignment: window.isEmpty
@@ -179,79 +186,100 @@ Future<String?> showNotionNetworkSelector(
     builder: (context) => LayoutBuilder(
       builder: (context, constraints) {
         final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
-        final width = math.min(
-          constraints.maxWidth - 32,
-          scale > 1.4 ? 300.0 : 196.0,
+        final padding = MediaQuery.paddingOf(context);
+        final insets = MediaQuery.viewInsetsOf(context);
+        final left = math.max(padding.left, insets.left) + NotionSpace.md;
+        final top = math.max(padding.top, insets.top) + NotionSpace.md;
+        final safe = Rect.fromLTWH(
+          left,
+          top,
+          math.max(
+            0.0,
+            constraints.maxWidth -
+                left -
+                math.max(padding.right, insets.right) -
+                NotionSpace.md,
+          ),
+          math.max(
+            0.0,
+            constraints.maxHeight -
+                top -
+                math.max(padding.bottom, insets.bottom) -
+                NotionSpace.md,
+          ),
         );
-        final bottom = math.max(
-          16.0,
-          constraints.maxHeight - anchor.top + NotionSpace.xs,
+        final width = math.min(safe.width, scale > 1.4 ? 300.0 : 196.0);
+        final above = (rect.top - NotionSpace.xs - safe.top).clamp(
+          0.0,
+          safe.height,
         );
-        final right = math.max(16.0, constraints.maxWidth - anchor.right);
-        final maxHeight = math.max(
-          96.0,
-          constraints.maxHeight -
-              bottom -
-              MediaQuery.paddingOf(context).top -
-              16,
+        final below = (safe.bottom - rect.bottom - NotionSpace.xs).clamp(
+          0.0,
+          safe.height,
         );
-        return Stack(
-          children: [
-            Positioned(
-              right: right,
-              bottom: bottom,
-              width: width,
-              child: Shortcuts(
-                shortcuts: const {
-                  SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+        final space = math.max(above, below);
+        // In a very short viewport, overlap the anchor rather than leave no
+        // reachable row. Otherwise keep the menu entirely on the roomier side.
+        final maxHeight = space < NotionSize.touchTarget ? safe.height : space;
+        return CustomSingleChildLayout(
+          delegate: _NetworkSelectorLayout(
+            anchor: rect,
+            safe: safe,
+            width: width,
+            maxHeight: maxHeight,
+            preferAbove: above > below,
+          ),
+          child: Semantics(
+            container: true,
+            explicitChildNodes: true,
+            label: 'Show chats',
+            child: Shortcuts(
+              shortcuts: const {
+                SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+              },
+              child: Actions(
+                actions: {
+                  DismissIntent: CallbackAction<DismissIntent>(
+                    onInvoke: (_) {
+                      Navigator.of(context).pop();
+                      return null;
+                    },
+                  ),
                 },
-                child: Actions(
-                  actions: {
-                    DismissIntent: CallbackAction<DismissIntent>(
-                      onInvoke: (_) {
-                        Navigator.of(context).pop();
-                        return null;
-                      },
-                    ),
-                  },
-                  child: Focus(
-                    autofocus: true,
-                    // One glass surface: tint, hairline and blur from the
-                    // first frame; the glass grows out of the dock pill and
-                    // the rows fade in inside it (NotionGlassReveal, DESIGN.md
-                    // "Glass"). No pointer, like Telegram and Messenger menus:
-                    // a separate pointer could not share the panel's blur.
-                    child: NotionGlassPanel(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxHeight: maxHeight),
-                        child: SingleChildScrollView(
-                          child: NotionNetworkMenu(
-                            networks: networks,
-                            selected: selected,
-                            selectedView: selectedView,
-                            onViewSelected: onViewSelected == null
-                                ? null
-                                : (view) {
-                                    Navigator.of(context).pop();
-                                    onViewSelected(view);
-                                  },
-                            onManageNetworks: onManageNetworks == null
-                                ? null
-                                : () {
-                                    Navigator.of(context).pop();
-                                    onManageNetworks();
-                                  },
-                            onMarkAllRead: onMarkAllRead == null
-                                ? null
-                                : () {
-                                    Navigator.of(context).pop();
-                                    onMarkAllRead();
-                                  },
-                            onSelected: (network) {
-                              onSelected(network);
-                              Navigator.of(context).pop(network);
-                            },
-                          ),
+                child: Focus(
+                  autofocus: true,
+                  child: NotionGlassPanel(
+                    key: const ValueKey('notion_network_selector_panel'),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: maxHeight),
+                      child: SingleChildScrollView(
+                        key: const ValueKey('notion_network_selector_scroll'),
+                        child: NotionNetworkMenu(
+                          networks: networks,
+                          selected: selected,
+                          selectedView: selectedView,
+                          onViewSelected: onViewSelected == null
+                              ? null
+                              : (view) {
+                                  Navigator.of(context).pop();
+                                  onViewSelected(view);
+                                },
+                          onManageNetworks: onManageNetworks == null
+                              ? null
+                              : () {
+                                  Navigator.of(context).pop();
+                                  onManageNetworks();
+                                },
+                          onMarkAllRead: onMarkAllRead == null
+                              ? null
+                              : () {
+                                  Navigator.of(context).pop();
+                                  onMarkAllRead();
+                                },
+                          onSelected: (network) {
+                            onSelected(network);
+                            Navigator.of(context).pop(network);
+                          },
                         ),
                       ),
                     ),
@@ -259,11 +287,61 @@ Future<String?> showNotionNetworkSelector(
                 ),
               ),
             ),
-          ],
+          ),
         );
       },
     ),
   );
+}
+
+/// Uses the menu's actual height so short menus stay beside their trigger and
+/// long menus scroll within the safe viewport, above a dock or below a header.
+class _NetworkSelectorLayout extends SingleChildLayoutDelegate {
+  const _NetworkSelectorLayout({
+    required this.anchor,
+    required this.safe,
+    required this.width,
+    required this.maxHeight,
+    required this.preferAbove,
+  });
+
+  final Rect anchor;
+  final Rect safe;
+  final double width;
+  final double maxHeight;
+  final bool preferAbove;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints(minWidth: width, maxWidth: width, maxHeight: maxHeight);
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final above = anchor.top - NotionSpace.xs - childSize.height;
+    final below = anchor.bottom + NotionSpace.xs;
+    final fitsAbove = above >= safe.top;
+    final fitsBelow = below + childSize.height <= safe.bottom;
+    final top = fitsAbove && (preferAbove || !fitsBelow)
+        ? above
+        : fitsBelow
+        ? below
+        : above;
+    final left = anchor.center.dx > size.width / 2
+        ? anchor.right - childSize.width
+        : anchor.left;
+    return Offset(
+      left.clamp(safe.left, math.max(safe.left, safe.right - childSize.width)),
+      top.clamp(safe.top, math.max(safe.top, safe.bottom - childSize.height)),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_NetworkSelectorLayout old) =>
+      old.anchor != anchor ||
+      old.safe != safe ||
+      old.width != width ||
+      old.maxHeight != maxHeight ||
+      old.preferAbove != preferAbove;
 }
 
 class NotionNetworkMenu extends StatelessWidget {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'dart:async';
 
+import 'package:chatloom/personal/bridge_contact_discovery.dart';
 import 'package:chatloom/personal/bridge_contact_search_provisioning.dart';
 import 'package:chatloom/personal/conversation_classification.dart';
 import 'package:chatloom/personal/matrix_error_text.dart';
@@ -10,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 import 'package:personal_core/personal_core.dart' show InboxRecord;
 
+export 'package:chatloom/personal/bridge_contact_discovery.dart';
 export 'package:chatloom/personal/bridge_contact_search_provisioning.dart';
 
 // ---------------------------------------------------------------------------
@@ -463,6 +465,7 @@ class BridgeDirectory extends ChangeNotifier {
     DateTime Function()? clock,
     this.disabledReason,
     this.reaches,
+    this.sessionCurrent,
   }) : _clock = clock ?? DateTime.now;
 
   /// A directory that never makes requests (no supported route).
@@ -470,6 +473,7 @@ class BridgeDirectory extends ChangeNotifier {
     : api = null,
       disabledReason = reason,
       reaches = null,
+      sessionCurrent = null,
       _clock = DateTime.now;
 
   final BridgeProvisioningApi? api;
@@ -477,6 +481,30 @@ class BridgeDirectory extends ChangeNotifier {
   /// Bridges the transport can reach at all (null: every bridge). The
   /// hungryserv route only reaches the account's own `beeper.local` bridges.
   final bool Function(BridgeEndpoint bridge)? reaches;
+  final bool Function()? sessionCurrent;
+  bool get _current => sessionCurrent?.call() ?? true;
+  List<BridgeEndpoint> _discovered = const [];
+  List<BridgeEndpoint> get discoveredBridges =>
+      _current ? _discovered : const [];
+
+  Future<void> discover({bool force = false}) async {
+    final transport = api?.transport;
+    if (!_current || transport is! BridgeProvisioningDiscovery) return;
+    final discovery = transport as BridgeProvisioningDiscovery;
+    await _once('discover', () async {
+      try {
+        final found = await discovery.discover(force: force);
+        if (!_current) return;
+        final changed =
+            _discovered.map((b) => b.botId).join('\n') !=
+            found.map((b) => b.botId).join('\n');
+        _discovered = List.unmodifiable(found);
+        if (changed) _changed();
+      } on BridgeProvisioningException {
+        // Per-bridge probes expose availability without leaking server details.
+      }
+    });
+  }
 
   /// Why bridge access is off for this account (shown with the networks).
   final String? disabledReason;
@@ -491,17 +519,23 @@ class BridgeDirectory extends ChangeNotifier {
   static const failureTtl = Duration(minutes: 5);
   static const contactsTtl = Duration(minutes: 10);
 
-  static final _sessions = Expando<(String?, BridgeDirectory)>(
+  static final _sessions = Expando<(Object, BridgeDirectory)>(
     'bridge directory',
   );
 
   /// The session directory of [client]'s signed-in account (a new one after
   /// the client signs in as someone else).
   static BridgeDirectory of(Client client) {
+    final identity = (
+      client.userID,
+      client.homeserver,
+      client.deviceID,
+      client.accessToken,
+    );
     final cached = _sessions[client];
-    if (cached != null && cached.$1 == client.userID) return cached.$2;
+    if (cached != null && cached.$1 == identity) return cached.$2;
     final directory = _create(client);
-    _sessions[client] = (client.userID, directory);
+    _sessions[client] = (identity, directory);
     return directory;
   }
 
@@ -509,37 +543,68 @@ class BridgeDirectory extends ChangeNotifier {
     const override = String.fromEnvironment('CHATLOOM_BRIDGE_PROVISIONING_URL');
     final homeserver = client.homeserver;
     final userId = client.userID;
-    if (homeserver == null || userId == null) {
+    final token = client.accessToken;
+    final device = client.deviceID;
+    if (homeserver == null ||
+        userId == null ||
+        token == null ||
+        token.isEmpty) {
       return BridgeDirectory.disabled('Not signed in.');
     }
     final beeper = RegExp(
       r'(^|\.)beeper(-staging|-dev)?\.com$',
     ).hasMatch(homeserver.host);
-    if (override.isEmpty && !beeper) {
-      return BridgeDirectory.disabled(
-        'Bridge contacts are available on Beeper accounts.',
-      );
-    }
+    bool current() =>
+        client.userID == userId &&
+        client.homeserver == homeserver &&
+        client.deviceID == device &&
+        client.accessToken == token;
+    String? currentToken() => current() ? client.accessToken : null;
+    final transport = override.isEmpty && !beeper
+        ? DiscoveredBridgeProvisioningTransport(
+            httpClient: client.httpClient,
+            homeserver: homeserver,
+            userId: userId,
+            accessToken: currentToken,
+            openId: () async {
+              if (!current()) throw const BridgeProvisioningException(401);
+              final identity = await client.requestOpenIdToken(
+                userId,
+                const {},
+              );
+              if (!current()) throw const BridgeProvisioningException(401);
+              return (
+                token: identity.accessToken,
+                expiresAt: DateTime.now().add(
+                  Duration(seconds: identity.expiresIn),
+                ),
+              );
+            },
+          )
+        : BeeperProvisioningTransport(
+            httpClient: client.httpClient,
+            homeserver: homeserver,
+            userId: userId,
+            accessToken: currentToken,
+            overrideUrl: override,
+          );
     return BridgeDirectory(
-      BridgeProvisioningApi(
-        BeeperProvisioningTransport(
-          httpClient: client.httpClient,
-          homeserver: homeserver,
-          userId: userId,
-          accessToken: () => client.accessToken,
-          overrideUrl: override,
-        ),
-      ),
-      reaches: override.isEmpty
+      BridgeProvisioningApi(transport),
+      sessionCurrent: current,
+      reaches: override.isEmpty && beeper
           ? (bridge) => bridge.domain == 'beeper.local'
           : null,
     );
   }
 
-  BridgeRemoteState stateOf(BridgeEndpoint bridge) =>
-      _states.putIfAbsent(bridge.botId, BridgeRemoteState.new);
+  BridgeRemoteState stateOf(BridgeEndpoint bridge) => _current
+      ? _states.putIfAbsent(bridge.botId, BridgeRemoteState.new)
+      : (BridgeRemoteState()
+          ..status = BridgeRemoteStatus.unavailable
+          ..reason = 'Account session changed');
 
   void _changed() {
+    if (!_current) return;
     revision++;
     notifyListeners();
   }
@@ -566,10 +631,23 @@ class BridgeDirectory extends ChangeNotifier {
       at != null && _clock().difference(at) < ttl;
 
   /// whoami + capabilities for every bridge not checked recently.
-  Future<void> probe(Iterable<BridgeEndpoint> bridges, {bool force = false}) =>
-      Future.wait([for (final bridge in bridges) _probe(bridge, force: force)]);
+  Future<void> probe(
+    Iterable<BridgeEndpoint> bridges, {
+    bool force = false,
+  }) async {
+    await discover(force: force);
+    if (!_current) return;
+    final all = {
+      for (final bridge in [...bridges, ...discoveredBridges])
+        bridge.botId: bridge,
+    };
+    await Future.wait([
+      for (final bridge in all.values) _probe(bridge, force: force),
+    ]);
+  }
 
   Future<void> _probe(BridgeEndpoint bridge, {required bool force}) {
+    if (!_current) return Future.value();
     final state = stateOf(bridge);
     final api = this.api;
     final reachable = reaches?.call(bridge) ?? true;
@@ -595,6 +673,7 @@ class BridgeDirectory extends ChangeNotifier {
       _changed();
       try {
         final whoami = await api.whoami(bridge);
+        if (!_current) return;
         state
           ..whoami = whoami
           ..reason = null;
@@ -634,6 +713,7 @@ class BridgeDirectory extends ChangeNotifier {
   /// [BridgeProvisioningException] on failure without touching the cached
   /// state (search shows its own probe result).
   Future<BridgeWhoami> refreshLogins(BridgeEndpoint bridge) async {
+    if (!_current) throw const BridgeProvisioningException(401);
     final api = this.api;
     if (api == null) {
       throw BridgeProvisioningException(0, message: disabledReason);
@@ -644,6 +724,7 @@ class BridgeDirectory extends ChangeNotifier {
     _logins[bridge.botId] = request;
     try {
       final whoami = await request;
+      if (!_current) throw const BridgeProvisioningException(401);
       final state = stateOf(bridge);
       String logins(BridgeWhoami? value) =>
           value?.usableLogins.map((login) => login.id).join(' ') ?? '';
@@ -670,6 +751,7 @@ class BridgeDirectory extends ChangeNotifier {
       Future.wait([for (final bridge in bridges) _loadContacts(bridge)]);
 
   Future<void> _loadContacts(BridgeEndpoint bridge) {
+    if (!_current) return Future.value();
     final state = stateOf(bridge);
     final api = this.api;
     if (api == null ||
@@ -725,6 +807,7 @@ class BridgeDirectory extends ChangeNotifier {
 
   /// Explicit network search for [query] on [bridge].
   Future<void> searchUsers(BridgeEndpoint bridge, String query) {
+    if (!_current) return Future.value();
     final state = stateOf(bridge);
     final api = this.api;
     final key = searchFold(query.trim());
@@ -753,8 +836,10 @@ class BridgeDirectory extends ChangeNotifier {
           for (final hit in hits) BridgeRemoteContact(hit, loginId),
         ];
       } on BridgeProvisioningException catch (e) {
-        state.actionError = state.searchErrors[key] =
-            humanErrorText(e, network: bridge.label);
+        state.actionError = state.searchErrors[key] = humanErrorText(
+          e,
+          network: bridge.label,
+        );
       } catch (e) {
         state.actionError = state.searchErrors[key] = humanErrorText(e);
       }
@@ -765,6 +850,7 @@ class BridgeDirectory extends ChangeNotifier {
 
   /// Explicit lookup of a phone number or username on [bridge].
   Future<void> lookUp(BridgeEndpoint bridge, SearchIdentifier identifier) {
+    if (!_current) return Future.value();
     final state = stateOf(bridge);
     final api = this.api;
     final key = identifier.value;
@@ -792,8 +878,10 @@ class BridgeDirectory extends ChangeNotifier {
             ? null
             : BridgeRemoteContact(contact, loginId);
       } on BridgeProvisioningException catch (e) {
-        state.actionError = state.lookupErrors[key] =
-            humanErrorText(e, network: bridge.label);
+        state.actionError = state.lookupErrors[key] = humanErrorText(
+          e,
+          network: bridge.label,
+        );
       } catch (e) {
         state.actionError = state.lookupErrors[key] = humanErrorText(e);
       }

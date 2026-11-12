@@ -131,6 +131,8 @@ class NetworkLoginBackend {
               overrideUrl: base.overrideUrl,
               timeout: loginTimeout,
             )
+          : base is DiscoveredBridgeProvisioningTransport
+          ? base.withTimeout(loginTimeout)
           : base,
       userId: userId,
       reaches: directory.reaches,
@@ -142,6 +144,11 @@ class NetworkLoginBackend {
               homeserver: beeper.homeserver,
               accessToken: beeper.accessToken,
             )
+          : base is DiscoveredBridgeProvisioningTransport
+          ? () async {
+              await directory.discover();
+              return directory.discoveredBridges;
+            }
           : null,
     );
   }

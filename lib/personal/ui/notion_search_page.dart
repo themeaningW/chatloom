@@ -97,7 +97,8 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
   Timer? _typing;
   final _expanded = <String>{};
   final _starting = <String>{};
-  bool _calloutDismissed = false;
+  int _scope = 0;
+  int _queryRevision = 0;
 
   final _bridgesMemo = PersonalSearchMemo<List<BridgeEndpoint>>();
   final _peopleMemo = PersonalSearchMemo<List<BridgePerson>>();
@@ -107,7 +108,7 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
 
   /// Usernames and numbers of the people of one-to-one chats, cached per
   /// room until their member state changes.
-  final _handles = ChatHandleIndex();
+  var _handles = ChatHandleIndex();
 
   /// Bumped when people's member state was read from the store.
   int _handlesRevision = 0;
@@ -118,9 +119,12 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
   void _loadHandles() {
     if (_handlesLoading) return;
     _handlesLoading = true;
+    final scope = _scope;
     unawaited(
       ChatHandleIndex.loadMissingPeers(_searchableRooms()).then((found) {
-        if (found && mounted) setState(() => _handlesRevision++);
+        if (found && mounted && scope == _scope) {
+          setState(() => _handlesRevision++);
+        }
       }),
     );
   }
@@ -137,7 +141,9 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
     if (mounted) setState(() {});
   }
 
-  /// Joined, non-technical chats, the most recently active first.
+  /// All joined, non-technical chats, including Archive and Aside. The
+  /// inbox index has no age or current-view cutoff; only the bounded device
+  /// message scan prefers recent chats.
   List<Room> _searchableRooms() {
     final index = widget.inbox.index;
     final projection = index.projection;
@@ -166,8 +172,8 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
     _directory.addListener(_directoryChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // whoami + capabilities only: no query leaves the device.
-      unawaited(_directory.probe(_bridges()));
+      // Advertised bridge discovery, whoami and capabilities only: no query.
+      unawaited(_discoverNetworks());
       _loadHandles();
       if (_applied.isNotEmpty) {
         _loadContacts();
@@ -201,6 +207,10 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
   @override
   void didUpdateWidget(NotionSearchPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final sourcesChanged =
+        !identical(oldWidget.personal, widget.personal) ||
+        !identical(oldWidget.inbox, widget.inbox) ||
+        !identical(oldWidget.directory, widget.directory);
     if (!identical(oldWidget.directory, widget.directory)) {
       oldWidget.directory.removeListener(_directoryChanged);
       widget.directory.addListener(_directoryChanged);
@@ -210,10 +220,39 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
       _releaseInbox = null;
       _holdInbox();
     }
+    if (sourcesChanged) {
+      _scope++;
+      _typing?.cancel();
+      _starting.clear();
+      _expanded.clear();
+      _device?.removeListener(_deviceChanged);
+      _device?.dispose();
+      _device = null;
+      _handles = ChatHandleIndex();
+      _handlesLoading = false;
+      _handlesRevision++;
+      _bridgesMemo.clear();
+      _peopleMemo.clear();
+      _chatsMemo.clear();
+      _messagesMemo.clear();
+      _resultsMemo.clear();
+      _recentMemo.clear();
+      final scope = _scope;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || scope != _scope) return;
+        unawaited(_discoverNetworks());
+        _loadHandles();
+        if (_applied.isNotEmpty) {
+          _loadContacts();
+          _deviceSearch.search(_applied);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _scope++;
     _releaseInbox?.call();
     _releaseInbox = null;
     _typing?.cancel();
@@ -234,6 +273,7 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
   void _loadContacts() => unawaited(_directory.loadContacts(_bridges()));
 
   void _typed(String _) {
+    _queryRevision++;
     _typing?.cancel();
     _typing = Timer(NotionSearchPage.typingDebounce, _apply);
   }
@@ -251,6 +291,48 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
     if (text.isNotEmpty || _device != null) _deviceSearch.search(text);
   }
 
+  /// The keyboard's Search action is an explicit request to the connected
+  /// networks. Typing and contact-list filtering never send this query.
+  Future<void> _submit() async {
+    _apply();
+    final query = _applied;
+    if (searchFold(query).length < 2 ||
+        !PersonalPrivacy.surfaceUnlocked ||
+        !PersonalPrivacy.surfaceForeground) {
+      return;
+    }
+    final scope = _scope;
+    final queryRevision = _queryRevision;
+    final surface = PersonalPrivacy.surfaceGeneration;
+    final client = _client;
+    final accountId = client.userID;
+    final directory = _directory;
+    await directory.discover();
+    if (!mounted || scope != _scope || !identical(directory, _directory)) {
+      return;
+    }
+    final bridges = _bridges();
+    await directory.probe(bridges);
+    if (!mounted ||
+        scope != _scope ||
+        queryRevision != _queryRevision ||
+        !identical(client, _client) ||
+        accountId != _client.userID ||
+        surface != PersonalPrivacy.surfaceGeneration ||
+        !PersonalPrivacy.surfaceUnlocked ||
+        !PersonalPrivacy.surfaceForeground ||
+        query != _applied ||
+        query != _query.text.trim()) {
+      return;
+    }
+    await Future.wait([
+      for (final bridge in bridges)
+        if (directory.stateOf(bridge).status == BridgeRemoteStatus.ready &&
+            directory.stateOf(bridge).capabilities.search)
+          directory.searchUsers(bridge, query),
+    ]);
+  }
+
   void _close() => Navigator.of(context).maybePop();
 
   // -------------------------------------------------------------------------
@@ -259,8 +341,13 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
 
   Object get _generation => (widget.inbox, widget.inbox.generation);
 
-  List<BridgeEndpoint> _bridges() =>
-      _bridgesMemo.resolve(_generation, () => discoverBridges(_client.rooms));
+  List<BridgeEndpoint> _bridges() => _bridgesMemo.resolve(
+    (_generation, _directory, _directory.revision),
+    () => {
+      for (final bridge in _directory.discoveredBridges) bridge.botId: bridge,
+      for (final bridge in discoverBridges(_client.rooms)) bridge.botId: bridge,
+    }.values.toList(),
+  );
 
   List<BridgePerson> _people() => _peopleMemo.resolve(_generation, () {
     final projection = widget.inbox.projection;
@@ -377,7 +464,12 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
     for (final hit in device.hits) {
       if (latest.contains(hit.eventId)) continue;
       final room = _client.getRoomById(hit.roomId);
-      if (room == null) continue;
+      if (room == null ||
+          room.membership != Membership.join ||
+          PersonalPrivacy.isJournal(room) ||
+          projection.classifier.classify(room).technical) {
+        continue;
+      }
       final snippet = localSnippet(hit.text, terms);
       final own = hit.senderId == _client.userID;
       final sender = own
@@ -469,6 +561,20 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
 
   void _searchHistory() => widget.onSearchHistory(_applied);
 
+  bool _actionIsCurrent(
+    int scope,
+    Client client,
+    String? accountId,
+    int surface,
+  ) =>
+      mounted &&
+      scope == _scope &&
+      identical(client, _client) &&
+      accountId == _client.userID &&
+      surface == PersonalPrivacy.surfaceGeneration &&
+      PersonalPrivacy.surfaceUnlocked &&
+      PersonalPrivacy.surfaceForeground;
+
   Future<void> _tapPerson(SearchPersonHit hit, SearchNetworkGroup group) async {
     final roomId = hit.roomId;
     if (roomId != null) {
@@ -499,30 +605,41 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
       return;
     }
     if (_starting.contains(hit.key)) return;
+    final scope = _scope;
+    final client = _client;
+    final accountId = client.userID;
+    final directory = _directory;
+    final surface = PersonalPrivacy.surfaceGeneration;
     final confirmed = await confirmBridgedChat(
       context,
       name: hit.name,
       network: network,
     );
-    if (!confirmed || !mounted) return;
+    if (!confirmed || !_actionIsCurrent(scope, client, accountId, surface)) {
+      return;
+    }
     setState(() => _starting.add(hit.key));
     try {
       final room = await startBridgedChat(
-        directory: _directory,
+        directory: directory,
         bridge: group.bridge,
         identifier: hit.identifier!,
         loginId: hit.loginId,
-        client: _client,
+        client: client,
       );
-      if (!mounted) return;
+      if (!_actionIsCurrent(scope, client, accountId, surface)) return;
       _openRoom(room);
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_actionIsCurrent(scope, client, accountId, surface)) {
+        return;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(bridgedChatError(error, network))));
     } finally {
-      if (mounted) setState(() => _starting.remove(hit.key));
+      if (mounted && scope == _scope) {
+        setState(() => _starting.remove(hit.key));
+      }
     }
   }
 
@@ -543,30 +660,50 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
     }
     final key = 'matrix:$userId';
     if (_starting.contains(key)) return;
+    final scope = _scope;
+    final client = _client;
+    final accountId = client.userID;
+    final surface = PersonalPrivacy.surfaceGeneration;
     setState(() => _starting.add(key));
     try {
-      final name = await matrixProfileName(_client, userId);
-      if (!mounted) return;
+      final name = await matrixProfileName(client, userId);
+      if (!mounted || !_actionIsCurrent(scope, client, accountId, surface)) {
+        return;
+      }
       final confirmed = await confirmMatrixChat(
         context,
         userId: userId,
         name: name,
       );
-      if (!confirmed || !mounted) return;
-      final room = await startMatrixChat(_client, userId);
-      if (!mounted) return;
+      if (!confirmed || !_actionIsCurrent(scope, client, accountId, surface)) {
+        return;
+      }
+      final room = await startMatrixChat(client, userId);
+      if (!_actionIsCurrent(scope, client, accountId, surface)) return;
       _openRoom(room);
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_actionIsCurrent(scope, client, accountId, surface)) {
+        return;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(matrixChatError(error, userId))));
     } finally {
-      if (mounted) setState(() => _starting.remove(key));
+      if (mounted && scope == _scope) setState(() => _starting.remove(key));
     }
   }
 
-  void _retry() => unawaited(_directory.probe(_bridges(), force: true));
+  Future<void> _discoverNetworks({bool force = false}) async {
+    final directory = _directory;
+    final scope = _scope;
+    await directory.probe(_bridges(), force: force);
+    if (!mounted || scope != _scope || !identical(directory, _directory)) {
+      return;
+    }
+    if (_applied.isNotEmpty) _loadContacts();
+  }
+
+  void _retry() => unawaited(_discoverNetworks(force: true));
 
   // -------------------------------------------------------------------------
   // Build
@@ -596,7 +733,7 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
             focusNode: _focus,
             autofocus: true,
             onChanged: _typed,
-            onSubmitted: (_) => _apply(),
+            onSubmitted: (_) => unawaited(_submit()),
             onClose: _close,
           ),
           actions: const [SizedBox(width: NotionSpace.sm)],
@@ -680,6 +817,8 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
   List<_Item> _items(UnifiedSearchResults results) {
     final query = _applied;
     final items = <_Item>[];
+    final availability = _availability();
+    if (availability != null) items.add(availability);
     final matrixId = _matrixId;
     if (matrixId != null) {
       items.add(_header('matrix', 'Matrix'));
@@ -730,8 +869,6 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
     }
 
     // People by network.
-    final callout = _callout();
-    if (callout != null) items.add(callout);
     for (final group in results.networks) {
       final key = 'net:${group.bridge.botId}';
       items.add(_Item('$key:header', (c) => _networkHeader(c, group)));
@@ -805,10 +942,10 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
         _directory.stateOf(bridge).contactsLoading;
   });
 
-  /// One note when no bridge can be asked for contacts.
-  _Item? _callout() {
+  /// Compact status; the results remain usable when discovery is offline.
+  _Item? _availability() {
     final bridges = _bridges();
-    if (_calloutDismissed || bridges.isEmpty) return null;
+    if (bridges.isEmpty) return null;
     final unavailable = bridges.every(
       (b) => _directory.stateOf(b).status == BridgeRemoteStatus.unavailable,
     );
@@ -816,19 +953,17 @@ class _NotionSearchPageState extends State<NotionSearchPage> {
     final disabled = _directory.disabledReason;
     return _Item(
       'bridges-unavailable',
-      (context) => Padding(
-        padding: const EdgeInsets.only(top: NotionSpace.md),
-        child: NotionCallout(
-          icon: Icons.link_off,
-          title: 'Only people from your chats',
-          message:
-              disabled ??
-              'ChatLoom can’t reach your bridges’ contact lists, so it can’t '
-                  'start new chats yet.',
-          actionLabel: disabled == null ? 'Retry' : null,
-          onAction: disabled == null ? _retry : null,
-          onDismiss: () => setState(() => _calloutDismissed = true),
-        ),
+      (context) => NotionListRow(
+        leading: const Icon(Icons.link_off, size: NotionSize.icon),
+        title: 'Network search unavailable',
+        subtitle: disabled ?? 'Your saved chats are still searchable.',
+        trailing: disabled == null
+            ? NotionIconButton(
+                icon: Icons.refresh,
+                label: 'Refresh networks',
+                onPressed: _retry,
+              )
+            : null,
       ),
     );
   }
@@ -1126,7 +1261,7 @@ class _EmptySearch extends StatelessWidget {
     BridgeRemoteStatus.checking => 'Checking the bridge…',
     BridgeRemoteStatus.notLoggedIn => 'Bridge not signed in',
     // The technical reason stays in the diagnostics log (CC-31).
-    BridgeRemoteStatus.unavailable => 'People from your chats only',
+    BridgeRemoteStatus.unavailable => 'Network search unavailable',
   };
 
   @override
@@ -1185,7 +1320,11 @@ class _EmptySearch extends StatelessWidget {
           NotionSectionHeader(
             title: 'Your networks',
             trailing: unavailable && directory.disabledReason == null
-                ? NotionButton.ghost(label: 'Retry', onPressed: onRetry)
+                ? NotionIconButton(
+                    icon: Icons.refresh,
+                    label: 'Refresh networks',
+                    onPressed: onRetry,
+                  )
                 : null,
           ),
           for (final bridge in bridges)
@@ -1202,10 +1341,9 @@ class _EmptySearch extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(top: NotionSpace.lg),
           child: Text(
-            'Type a name to find chats, people on your networks and recent '
-            'messages. Phone numbers and @usernames can be looked up on '
-            'networks that support it; a Matrix ID (@name:server) starts a '
-            'Matrix chat.',
+            'Find chats, including Archive and Aside. Tap Search on the '
+            'keyboard to find people on supported networks. Phone numbers '
+            'can be looked up on networks that support them.',
             style: context.notion.typography.footnoteMuted,
           ),
         ),

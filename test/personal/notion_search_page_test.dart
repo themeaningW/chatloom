@@ -1,22 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The inbox has no compose button; the full-screen search finds chats,
+// Search and New message share the full-screen flow that finds chats,
 // people of the connected networks (grouped by network) and messages, and
 // starts new chats through the bridge only after an explicit, confirmed tap.
 // Bridges are fakes; nothing leaves the test.
+import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:chatloom/l10n/l10n.dart';
 import 'package:chatloom/pages/chat_list/inbox_controller.dart';
 import 'package:chatloom/personal/bridge_contact_search.dart';
 import 'package:chatloom/personal/matrix_start_chat.dart';
 import 'package:chatloom/personal/personal_client.dart';
+import 'package:chatloom/personal/privacy.dart';
 import 'package:chatloom/personal/ui/notion_inbox_page.dart';
 import 'package:chatloom/personal/ui/notion_network_selector.dart';
 import 'package:chatloom/personal/ui/notion_search_page.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
-import 'package:personal_core/personal_core.dart' show InboxFilter;
+import 'package:personal_core/personal_core.dart'
+    show InboxFilter, personalRoomMarker, personalSchemaVersion;
 
 const _owner = '@owner:example.invalid';
 const _waBot = '@sh-whatsappbot:beeper.local';
@@ -26,6 +34,7 @@ const _anna = '@sh-whatsapp_200:beeper.local';
 const _bogdan = '@sh-whatsapp_300:beeper.local';
 const _annaTg = '@sh-telegram_1:beeper.local';
 const _cezary = '@sh-telegram_2:beeper.local';
+const _capture = ValueKey('contact_search_capture');
 
 class _NoDatabase implements DatabaseApi {
   @override
@@ -33,8 +42,22 @@ class _NoDatabase implements DatabaseApi {
       throw StateError('Unexpected database access');
 }
 
+class _StoredDatabase extends _NoDatabase {
+  final events = <String, List<Event>>{};
+
+  @override
+  Future<List<Event>> getEventList(
+    Room room, {
+    int start = 0,
+    bool onlySending = false,
+    int? limit,
+  }) async =>
+      (events[room.id] ?? const []).skip(start).take(limit ?? 200).toList();
+}
+
 class _Client extends Client {
-  _Client() : super('synthetic search', database: _NoDatabase());
+  _Client({DatabaseApi? database})
+    : super('synthetic search', database: database ?? _NoDatabase());
   @override
   String get userID => _owner;
 
@@ -150,7 +173,7 @@ Room _room(
 }
 
 class _Fixture {
-  _Fixture() {
+  _Fixture({DatabaseApi? database}) : client = _Client(database: database) {
     dm = _room(
       client,
       '!dm:example.invalid',
@@ -185,7 +208,7 @@ class _Fixture {
     );
   }
 
-  final client = _Client();
+  final _Client client;
   late final personal = PersonalClient.of(client);
   late final inbox = InboxController(client, personal);
   late final Room dm, family;
@@ -252,7 +275,8 @@ FakeProvisioning _bridges(_Fixture fixture, {bool reachable = true}) =>
 
 class FakeProvisioning implements BridgeProvisioningTransport {
   FakeProvisioning(this.handler);
-  final Object? Function(BridgeEndpoint, BridgeProvisioningRequest) handler;
+  final FutureOr<Object?> Function(BridgeEndpoint, BridgeProvisioningRequest)
+  handler;
   final requests = <(String, BridgeProvisioningRequest)>[];
   List<String> get paths => [
     for (final r in requests) '${r.$2.method} ${r.$2.path}',
@@ -265,6 +289,29 @@ class FakeProvisioning implements BridgeProvisioningTransport {
   ) async {
     requests.add((bridge.botId, request));
     return handler(bridge, request);
+  }
+}
+
+/// A transport-advertised bridge can exist before this account has a portal.
+class _DiscoveredDirectory extends BridgeDirectory {
+  _DiscoveredDirectory(super.api, this.bridges, {this.gate});
+
+  final List<BridgeEndpoint> bridges;
+  final Completer<void>? gate;
+  bool discovered = false;
+  final discoveryForces = <bool>[];
+
+  @override
+  List<BridgeEndpoint> get discoveredBridges => discovered ? bridges : const [];
+
+  @override
+  Future<void> discover({bool force = false}) async {
+    discoveryForces.add(force);
+    await gate?.future;
+    if (discovered) return;
+    discovered = true;
+    revision++;
+    notifyListeners();
   }
 }
 
@@ -286,30 +333,34 @@ Future<void> _openSearch(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    MaterialApp(
-      theme: NotionTheme.build(Brightness.dark),
-      localizationsDelegates: L10n.localizationsDelegates,
-      supportedLocales: L10n.supportedLocales,
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: TextButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => NotionSearchPage(
-                    personal: fixture.personal,
-                    inbox: fixture.inbox,
-                    directory: directory,
-                    closeOnOpen: false,
-                    onOpenRoom: (room) => opened.rooms.add(room.id),
-                    onOpenMessage: (room, event) =>
-                        opened.messages.add((room.id, event)),
-                    onSearchHistory: opened.history.add,
-                    onSelectView: opened.views.add,
+    RepaintBoundary(
+      key: _capture,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: NotionTheme.build(Brightness.dark),
+        localizationsDelegates: L10n.localizationsDelegates,
+        supportedLocales: L10n.supportedLocales,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => NotionSearchPage(
+                      personal: fixture.personal,
+                      inbox: fixture.inbox,
+                      directory: directory,
+                      closeOnOpen: false,
+                      onOpenRoom: (room) => opened.rooms.add(room.id),
+                      onOpenMessage: (room, event) =>
+                          opened.messages.add((room.id, event)),
+                      onSearchHistory: opened.history.add,
+                      onSelectView: opened.views.add,
+                    ),
                   ),
                 ),
+                child: const Text('Open search'),
               ),
-              child: const Text('Open search'),
             ),
           ),
         ),
@@ -328,8 +379,51 @@ Future<void> _type(WidgetTester tester, String text) async {
   await tester.pumpAndSettle();
 }
 
+/// Optional rendered fixture evidence; ordinary runs create no artifacts.
+Future<void> _captureSearch(WidgetTester tester, String name) async {
+  final directory = Platform.environment['CHATLOOM_CONTACT_CAPTURE_DIR'];
+  if (directory == null || directory.isEmpty) return;
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(_capture),
+  );
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(
+      pixelRatio: tester.view.devicePixelRatio,
+    );
+    try {
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      final file = File('$directory/$name.png');
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(bytes!.buffer.asUint8List());
+    } finally {
+      image.dispose();
+    }
+  });
+}
+
 void main() {
-  testWidgets('the inbox has no compose button; Search is the entry point', (
+  setUpAll(() async {
+    final directory = Platform.environment['CHATLOOM_CONTACT_CAPTURE_DIR'];
+    if (directory == null || directory.isEmpty) return;
+    final text = FontLoader('Roboto');
+    for (final name in ['Regular', 'Medium', 'Bold']) {
+      text.addFont(rootBundle.load('assets/notion/fonts/Roboto-$name.ttf'));
+    }
+    await text.load();
+    final icons = FontLoader('MaterialIcons');
+    icons.addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+    await icons.load();
+  });
+  setUp(() {
+    PersonalPrivacy.surfaceUnlocked = true;
+    PersonalPrivacy.surfaceForeground = true;
+  });
+  tearDown(() {
+    PersonalPrivacy.surfaceUnlocked = true;
+    PersonalPrivacy.surfaceForeground = true;
+  });
+
+  testWidgets('Search and New message open the same conversation search', (
     tester,
   ) async {
     var searches = 0;
@@ -346,13 +440,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.edit_square), findsNothing);
-    expect(find.byTooltip('New chat'), findsNothing);
+    expect(find.byTooltip('New message'), findsOneWidget);
     expect(find.text('Chats'), findsOneWidget);
     expect(find.textContaining('Use Search'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('notion_dock_search')));
     await tester.pumpAndSettle();
     expect(searches, 1);
+    await tester.tap(find.byTooltip('New message'));
+    await tester.pumpAndSettle();
+    expect(searches, 2);
   });
 
   testWidgets(
@@ -368,7 +464,7 @@ void main() {
       expect(transport.paths.where((p) => p.contains('contacts')), isEmpty);
       expect(find.text('Your networks'), findsOneWidget);
       expect(find.text('Find people and start chats'), findsOneWidget);
-      expect(find.text('People from your chats only'), findsOneWidget);
+      expect(find.text('Network search unavailable'), findsOneWidget);
 
       await _type(tester, 'anna');
       // People of bridged chats and bridge contacts, under their network.
@@ -418,6 +514,398 @@ void main() {
       fixture.dispose();
     },
   );
+
+  testWidgets(
+    'keyboard Search finds Messenger and Instagram people, honoring WhatsApp capabilities',
+    (tester) async {
+      final fixture = _Fixture();
+      const messenger = BridgeEndpoint(
+        botId: '@messengerbot:example.invalid',
+        network: 'facebook',
+        label: 'Messenger',
+      );
+      const instagram = BridgeEndpoint(
+        botId: '@instagrambot:example.invalid',
+        network: 'instagram',
+        label: 'Instagram',
+      );
+      final transport = FakeProvisioning((bridge, request) {
+        final supportsSearch =
+            bridge.botId == messenger.botId || bridge.botId == instagram.botId;
+        return switch (request.path) {
+          '/v3/whoami' => {
+            'network': {'displayname': bridge.label},
+            'bridge_bot': bridge.botId,
+            'logins': [
+              {'id': 'fictional-login'},
+            ],
+          },
+          '/v3/capabilities' => {
+            'resolve_identifier': {
+              'create_dm': true,
+              'contact_list': bridge.botId == _waBot,
+              'search': supportsSearch,
+              'lookup_phone': bridge.botId == _waBot,
+            },
+          },
+          '/v3/contacts' => {'contacts': <Object>[]},
+          '/v3/search_users' => {
+            'results': [
+              {'id': 'fictional-anna', 'name': 'Anna ${bridge.label}'},
+            ],
+          },
+          _ => throw StateError('Unexpected operation: ${request.path}'),
+        };
+      });
+      final directory = _DiscoveredDirectory(
+        BridgeProvisioningApi(transport),
+        const [messenger, instagram],
+      );
+      final opened = _Opened();
+      await _openSearch(tester, fixture, directory, opened);
+      // These bridges have no joined rooms yet, but are still discoverable.
+      expect(find.text('Messenger'), findsOneWidget);
+      expect(find.text('Instagram'), findsOneWidget);
+      await _type(tester, 'anna');
+      expect(transport.paths.where((p) => p.contains('search_users')), isEmpty);
+      expect(
+        transport.requests
+            .where((r) => r.$2.path == '/v3/contacts')
+            .map((r) => r.$1),
+        [_waBot],
+      );
+      expect(find.text('Search WhatsApp for “anna”'), findsNothing);
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      final searches = transport.requests.where(
+        (r) => r.$2.path == '/v3/search_users',
+      );
+      expect(
+        searches.map((r) => r.$1),
+        unorderedEquals([messenger.botId, instagram.botId]),
+      );
+      expect(searches.every((r) => r.$2.body?['query'] == 'anna'), isTrue);
+      expect(find.text('Anna Messenger'), findsOneWidget);
+      expect(find.text('Anna Instagram'), findsOneWidget);
+      expect(transport.paths.where((p) => p.contains('create_dm')), isEmpty);
+      expect(opened.rooms, isEmpty);
+      await _captureSearch(tester, 'contact-search-connected-networks');
+      // New contacts use the same confirmation as people from existing chats.
+      await tester.tap(find.text('Anna Messenger'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Start a Messenger chat with Anna Messenger?'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(transport.paths.where((p) => p.contains('create_dm')), isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      fixture.dispose();
+    },
+  );
+
+  testWidgets('late network results belong to the submitted query only', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    final working = _bridges(fixture);
+    final pending = Completer<Object?>();
+    final transport = FakeProvisioning((bridge, request) {
+      if (request.path == '/v3/search_users') return pending.future;
+      return working.handler(bridge, request);
+    });
+    final directory = BridgeDirectory(BridgeProvisioningApi(transport));
+    await _openSearch(tester, fixture, directory, _Opened());
+    await _type(tester, 'anna');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    expect(
+      transport.paths.where((p) => p.contains('search_users')),
+      hasLength(1),
+    );
+    await tester.enterText(find.byType(TextField), 'cezary');
+    await tester.pump(NotionSearchPage.typingDebounce);
+    pending.complete({
+      'results': [
+        {'id': 'fictional-anna', 'name': 'Anna Remote'},
+      ],
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Anna Remote'), findsNothing);
+    expect(find.text('Cezary Fikcyjny'), findsOneWidget);
+    expect(transport.paths.where((p) => p.contains('create_dm')), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    fixture.dispose();
+  });
+
+  testWidgets('keyboard Search does not send queries while locked', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    final transport = _bridges(fixture);
+    final directory = BridgeDirectory(BridgeProvisioningApi(transport));
+    await _openSearch(tester, fixture, directory, _Opened());
+    await _type(tester, 'anna');
+    PersonalPrivacy.surfaceUnlocked = false;
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    expect(transport.paths.where((p) => p.contains('search_users')), isEmpty);
+    expect(transport.paths.where((p) => p.contains('create_dm')), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    fixture.dispose();
+  });
+
+  testWidgets('a query changed during discovery is not sent afterward', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    final transport = _bridges(fixture);
+    final gate = Completer<void>();
+    final directory = _DiscoveredDirectory(
+      BridgeProvisioningApi(transport),
+      const [],
+      gate: gate,
+    );
+    await _openSearch(tester, fixture, directory, _Opened());
+    await _type(tester, 'anna');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    await _type(tester, 'cezary');
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Cezary Fikcyjny'), findsOneWidget);
+    expect(transport.paths.where((p) => p.contains('search_users')), isEmpty);
+    expect(transport.paths.where((p) => p.contains('create_dm')), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    fixture.dispose();
+  });
+
+  testWidgets('locking during discovery cancels the pending Search intent', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    final transport = _bridges(fixture);
+    final gate = Completer<void>();
+    final directory = _DiscoveredDirectory(
+      BridgeProvisioningApi(transport),
+      const [],
+      gate: gate,
+    );
+    await _openSearch(tester, fixture, directory, _Opened());
+    await _type(tester, 'anna');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    PersonalPrivacy.surfaceUnlocked = false;
+    PersonalPrivacy.surfaceUnlocked = true;
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(transport.paths.where((p) => p.contains('search_users')), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    fixture.dispose();
+  });
+
+  testWidgets('leaving search cancels discovery before a query can be sent', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    final transport = _bridges(fixture);
+    final gate = Completer<void>();
+    final directory = _DiscoveredDirectory(
+      BridgeProvisioningApi(transport),
+      const [],
+      gate: gate,
+    );
+    await _openSearch(tester, fixture, directory, _Opened());
+    await _type(tester, 'anna');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    await tester.tap(find.byTooltip('Close search'));
+    await tester.pumpAndSettle();
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(transport.paths.where((p) => p.contains('search_users')), isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    fixture.dispose();
+  });
+
+  testWidgets('locking invalidates a displayed new-chat confirmation', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    final transport = _bridges(fixture);
+    final directory = BridgeDirectory(BridgeProvisioningApi(transport));
+    final opened = _Opened();
+    await _openSearch(tester, fixture, directory, opened);
+    await _type(tester, 'grupowa');
+    await tester.tap(find.text('Anna Grupowa'));
+    await tester.pumpAndSettle();
+    PersonalPrivacy.surfaceUnlocked = false;
+    PersonalPrivacy.surfaceUnlocked = true;
+    await tester.tap(find.text('Start chat'));
+    await tester.pumpAndSettle();
+    expect(transport.paths.where((p) => p.contains('create_dm')), isEmpty);
+    expect(opened.rooms, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    fixture.dispose();
+  });
+
+  testWidgets(
+    'old joined chats remain searchable in Archive and Aside, without private journals',
+    (tester) async {
+      final database = _StoredDatabase();
+      final fixture = _Fixture(database: database);
+      fixture.personal.values['org:${fixture.dm.id}'] = {'archived': true};
+      fixture.personal.values['org:${fixture.family.id}'] = {
+        'placement': 'aside',
+      };
+      fixture.dm.lastEvent = Event(
+        room: fixture.dm,
+        type: EventTypes.Message,
+        content: {
+          'msgtype': MessageTypes.Text,
+          'body': 'Fictional old postcard',
+        },
+        eventId: r'$fixture-old-postcard',
+        senderId: _alicja,
+        originServerTs: DateTime.utc(2017),
+      );
+      database.events[fixture.dm.id] = [
+        Event(
+          room: fixture.dm,
+          type: EventTypes.Message,
+          content: {
+            'msgtype': MessageTypes.Text,
+            'body': 'Fictional weather report from long ago',
+          },
+          eventId: r'$fixture-stored-weather',
+          senderId: _alicja,
+          originServerTs: DateTime.utc(2011),
+        ),
+      ];
+      final journal = _room(
+        fixture.client,
+        '!journal:example.invalid',
+        bot: _waBot,
+        protocol: 'whatsapp',
+        members: {_anna: 'Journal Private Person'},
+        name: 'Journal Private Name',
+        dm: true,
+      );
+      _state(journal, personalRoomMarker, {'schema': personalSchemaVersion});
+      journal.lastEvent = Event(
+        room: journal,
+        type: EventTypes.Message,
+        content: {
+          'msgtype': MessageTypes.Text,
+          'body': 'Journal Private Message',
+        },
+        eventId: r'$fixture-private',
+        senderId: _anna,
+        originServerTs: DateTime.utc(2016),
+      );
+      final opened = _Opened();
+      await _openSearch(
+        tester,
+        fixture,
+        BridgeDirectory.disabled('Not available in tests.'),
+        opened,
+      );
+      await _type(tester, 'alicja');
+      expect(find.text('Alicja Fikcyjna'), findsOneWidget);
+      await tester.tap(find.text('Alicja Fikcyjna'));
+      await tester.pumpAndSettle();
+      expect(opened.rooms, [fixture.dm.id]);
+      await _type(tester, 'rodzina');
+      expect(find.text('Rodzina'), findsOneWidget);
+      await tester.tap(find.text('Rodzina'));
+      await tester.pumpAndSettle();
+      expect(opened.rooms, [fixture.dm.id, fixture.family.id]);
+      await _type(tester, 'postcard');
+      expect(find.textContaining('Fictional old postcard'), findsOneWidget);
+      await tester.tap(find.textContaining('Fictional old postcard'));
+      await tester.pumpAndSettle();
+      expect(opened.messages, [(fixture.dm.id, r'$fixture-old-postcard')]);
+      await _type(tester, 'weather report');
+      expect(
+        find.textContaining('Fictional weather report from long ago'),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.textContaining('Fictional weather report from long ago'),
+      );
+      await tester.pumpAndSettle();
+      expect(opened.messages.last, (fixture.dm.id, r'$fixture-stored-weather'));
+      await _type(tester, 'journal private');
+      expect(find.text('Journal Private Name'), findsNothing);
+      expect(find.text('Journal Private Person'), findsNothing);
+      expect(find.textContaining('Journal Private Message'), findsNothing);
+      expect(find.textContaining('No results for'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      fixture.dispose();
+    },
+  );
+
+  testWidgets('switching account sources drops old stored-message results', (
+    tester,
+  ) async {
+    final database = _StoredDatabase();
+    final old = _Fixture(database: database);
+    database.events[old.dm.id] = [
+      Event(
+        room: old.dm,
+        type: EventTypes.Message,
+        content: {
+          'msgtype': MessageTypes.Text,
+          'body': 'Fictional previous ledger',
+        },
+        eventId: r'$fixture-previous-ledger',
+        senderId: _alicja,
+        originServerTs: DateTime.utc(2014),
+      ),
+    ];
+    // The next account deliberately uses the same synthetic room IDs.
+    final current = _Fixture(database: _StoredDatabase());
+    final active = ValueNotifier(old);
+    final oldDirectory = BridgeDirectory.disabled('Not available in tests.');
+    final currentDirectory = BridgeDirectory.disabled(
+      'Not available in tests.',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: NotionTheme.build(Brightness.dark),
+        localizationsDelegates: L10n.localizationsDelegates,
+        supportedLocales: L10n.supportedLocales,
+        home: ValueListenableBuilder<_Fixture>(
+          valueListenable: active,
+          builder: (_, fixture, _) => NotionSearchPage(
+            key: const ValueKey('account-search'),
+            personal: fixture.personal,
+            inbox: fixture.inbox,
+            directory: identical(fixture, old)
+                ? oldDirectory
+                : currentDirectory,
+            initialQuery: 'ledger',
+            closeOnOpen: false,
+            onOpenRoom: (_) {},
+            onOpenMessage: (_, _) {},
+            onSearchHistory: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Fictional previous ledger'), findsOneWidget);
+    active.value = current;
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Fictional previous ledger'), findsNothing);
+    expect(find.textContaining('No results for'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    active.dispose();
+    old.dispose();
+    current.dispose();
+  });
 
   testWidgets('starting a chat asks first; only a confirmed tap creates it', (
     tester,
@@ -490,7 +978,17 @@ void main() {
       final opened = _Opened();
       await _openSearch(tester, fixture, directory, opened);
       await _type(tester, 'anna');
-      expect(find.text('Only people from your chats'), findsOneWidget);
+      expect(find.text('Network search unavailable'), findsOneWidget);
+      expect(find.text('Only people from your chats'), findsNothing);
+      expect(find.byTooltip('Refresh networks'), findsOneWidget);
+      await _captureSearch(tester, 'contact-search-unavailable');
+      final checks = transport.paths.where((p) => p == 'GET /v3/whoami').length;
+      await tester.tap(find.byTooltip('Refresh networks'));
+      await tester.pumpAndSettle();
+      expect(
+        transport.paths.where((p) => p == 'GET /v3/whoami').length,
+        greaterThan(checks),
+      );
       expect(find.text('Anna Grupowa'), findsOneWidget);
       expect(find.text('Anna Telegramowa'), findsOneWidget);
       expect(find.textContaining('Search WhatsApp'), findsNothing);
@@ -513,7 +1011,7 @@ void main() {
     final directory = BridgeDirectory.disabled('Not available in tests.');
     final opened = _Opened();
     await _openSearch(tester, fixture, directory, opened);
-    expect(find.text('People from your chats only'), findsNWidgets(2));
+    expect(find.text('Network search unavailable'), findsNWidgets(2));
     await tester.tap(find.text('Archive'));
     await tester.pumpAndSettle();
     expect(opened.views, [InboxFilter.archive]);
