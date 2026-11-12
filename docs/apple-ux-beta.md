@@ -35,6 +35,13 @@ reachability covered by a widget test. The separate presentation harness still
 cannot start without its external source-snapshot prerequisite; these captures
 come from the full-app feedback fixture instead.
 
+The Windows xcross release of `90e3799` completed as **2.10.0 (3577)**.
+Bundle metadata, screenshot/share controls in AOT, the retained bridge endpoint,
+notification and shake hooks were verified; the removed thread preview remains
+absent. This artifact has not been installed on the physical iPhone. Actual
+iOS capture/native sharing and Swift/Xcode compilation remain unverified here;
+the known dSYM and CocoaPods-only Share plugin limitations remain.
+
 ## Full-thread browsing without the long-press preview (3576)
 
 Holding an inbox row or pin opens the compact actions menu again, matching
