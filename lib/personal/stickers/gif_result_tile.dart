@@ -236,6 +236,12 @@ class _GifResultTileState extends State<GifResultTile>
     if (generation != _generation) throw StateError('superseded');
     final custom = GifResultTile.debugCreatePlayer;
     if (custom != null) return custom(media);
+    if (media.remoteVideo case final remote?) {
+      return VideoPlayerController.networkUrl(
+        remote,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
+    }
     final uri = media.item?.uri;
     if (uri == null) throw StateError('no media');
     final bytes = await widget.room.client.downloadMxcCached(uri);
@@ -358,7 +364,7 @@ class _GifResultTileState extends State<GifResultTile>
           )
         : ColoredBox(color: colors.surface);
     return Semantics(
-      label: 'GIF',
+      label: widget.result.title ?? (widget.result.hasAudio ? 'Clip' : 'GIF'),
       button: true,
       child: NotionTapTarget(
         onTap: widget.onTap,
@@ -369,7 +375,13 @@ class _GifResultTileState extends State<GifResultTile>
             fit: StackFit.expand,
             children: [
               blurred(context),
-              if (thumbnail != null)
+              if (thumbnail != null && thumbnail.scheme == 'https')
+                Image.network(
+                  thumbnail.toString(),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, _, _) => blurred(context),
+                ),
+              if (thumbnail != null && thumbnail.scheme == 'mxc')
                 MxcImage(
                   uri: thumbnail,
                   client: widget.room.client,

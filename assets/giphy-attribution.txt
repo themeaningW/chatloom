@@ -1,0 +1,4 @@
+Official GIPHY attribution marks, unmodified.
+Source: https://media.giphy.com/giphy-attribution-marks.zip
+Downloaded 2026-11-12. Used for the GIPHY search integration's required attribution.
+These trademarks are GIPHY's property, not ChatLoom branding.

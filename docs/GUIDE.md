@@ -39,8 +39,11 @@ voice-message transcription, scheduled messages and reminders.
 - **Round videos and voice as text.** Watch, record and send Telegram round
   videos. Transcribe any voice note or round video with one tap, or
   automatically within a daily budget. Only you see the transcript.
-- **GIFs and stickers.** Search GIFs right in the composer. The search goes
-  through Telegram's `@gif` and your own bridge. Import sticker packs from
+- **GIFs and stickers.** Choose KLIPY or GIPHY in the composer's GIF tab
+  (separate API keys required). KLIPY also searches short clips. Tap a result
+  to preview, then Send.
+  The bookmark opens saved GIFs and the existing Telegram `@gif` search.
+  Import sticker packs from
   `t.me/addstickers` links. An emoji picker is built in.
 - **Send later and reminders.** Write now and deliver tomorrow morning.
   Bookmark messages. Set a reminder on a chat, optionally only if they don't

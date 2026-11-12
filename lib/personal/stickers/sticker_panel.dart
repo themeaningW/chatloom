@@ -5,8 +5,8 @@ import 'package:chatloom/ui/notion/notion.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
-import 'gif_tab.dart';
 import 'notion_emoji_picker.dart';
+import 'online_gif_panel.dart';
 import 'sticker_library.dart';
 import 'sticker_tab.dart';
 
@@ -159,7 +159,7 @@ class _StickerPanelState extends State<StickerPanel>
 
   Widget _content(StickerPanelTab tab) => switch (tab) {
     StickerPanelTab.emoji => ComposerEmojiTab(host: widget.host),
-    StickerPanelTab.gifs => GifTab(
+    StickerPanelTab.gifs => OnlineGifPanel(
       host: widget.host,
       searchFocus: _gifSearch,
       library: widget.library,

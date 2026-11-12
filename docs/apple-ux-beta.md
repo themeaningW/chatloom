@@ -165,6 +165,20 @@ on the phone: its USB tunnel setup stopped when Windows administrator approval
 was not granted. The existing 3570 installation was preserved. The toolchain's
 known missing dSYM and CocoaPods-only Share extension limits still apply.
 
+## GIF and clip search (3572)
+
+The GIF composer panel now offers separate KLIPY and GIPHY sources. KLIPY
+includes GIFs and audio clips; GIPHY offers GIFs. Each provider needs its own
+key, configurable through the panel's settings and stored on this device.
+No provider key is bundled in the repository. A selected item opens a preview
+and requires Send; the bookmark retains saved GIFs and Telegram search.
+See [configuration, data flow and acceptance limits](gif-search.md).
+
+60 focused API/widget/sticker regressions pass, app analysis has zero errors
+and warnings (70 existing informational findings), and the design-token
+no-growth check passes. Tests use fictional responses and a fake player;
+they do not establish live provider approval, real search or iPhone playback.
+
 ## Rendered examples
 
 Rendered examples:

@@ -71,8 +71,7 @@ class _Host implements ConversationComposerHost {
   void emojiPickerBackspace() {}
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 Widget _app(Widget child) => MaterialApp(
@@ -149,10 +148,7 @@ void main() {
     expect(room.sent, hasLength(1));
     final (type, content) = room.sent.single;
     expect(type, EventTypes.Sticker);
-    expect(
-      (content['info'] as Map)['fi.mau.bridged_sticker'],
-      isA<Map>(),
-    );
+    expect((content['info'] as Map)['fi.mau.bridged_sticker'], isA<Map>());
     await library.flush();
     await tester.pumpAndSettle();
     // The sticker is the newest recent, and the panel stays open.
@@ -215,7 +211,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Sticker 😀'));
     await tester.pump();
-    expect(find.text('This sticker can’t be sent to Telegram.'), findsOneWidget);
+    expect(
+      find.text('This sticker can’t be sent to Telegram.'),
+      findsOneWidget,
+    );
     expect(room.sent, isEmpty);
     await tester.pumpAndSettle();
   });
@@ -228,6 +227,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('panel-tab-gifs')));
     await tester.pumpAndSettle();
     expect(StickerPanel.lastTab, StickerPanelTab.gifs);
+    expect(find.text('Set up KLIPY'), findsOneWidget);
+    await tester.tap(find.byTooltip('Saved GIFs and Telegram'));
+    await tester.pumpAndSettle();
     expect(find.text('No saved GIFs yet'), findsOneWidget);
     library.saveGif(imageGif('g'));
     await tester.pumpAndSettle();
@@ -405,10 +407,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump(const Duration(milliseconds: 200));
       expect(composerBottom(tester), 500);
-      expect(
-        ComposerKeyboardMetrics.heightFor(Orientation.portrait),
-        300,
-      );
+      expect(ComposerKeyboardMetrics.heightFor(Orientation.portrait), 300);
 
       // Keyboard → panel: shown at once, uncovered as the keyboard leaves.
       input.unfocus();

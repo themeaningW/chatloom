@@ -19,6 +19,10 @@ class GifSearchResult {
     this.durationMs,
     this.size,
     this.preview,
+    this.remoteVideo,
+    this.remoteThumbnail,
+    this.title,
+    this.hasAudio = false,
   });
 
   final String id;
@@ -30,6 +34,10 @@ class GifSearchResult {
 
   /// A tiny blurred JPEG (Telegram's stripped thumbnail) shown at once.
   final Uint8List? preview;
+  final Uri? remoteVideo;
+  final Uri? remoteThumbnail;
+  final String? title;
+  final bool hasAudio;
 
   double get aspectRatio {
     final w = width, h = height;
@@ -93,10 +101,11 @@ class GifSearchPage {
 /// sendable [item] (`m.video` + `fi.mau.gif`, unencrypted public media).
 @immutable
 class GifMedia {
-  const GifMedia({this.thumbnail, this.item});
+  const GifMedia({this.thumbnail, this.item, this.remoteVideo});
 
   final Uri? thumbnail;
   final StickerItem? item;
+  final Uri? remoteVideo;
 
   static GifMedia fromJson(Object? json) {
     if (json is! Map) return const GifMedia();
