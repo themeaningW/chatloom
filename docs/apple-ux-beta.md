@@ -95,6 +95,35 @@ worker/tool packages lack their own dependency setup, and existing smoke
 scripts contain unresolved symbols. That result is separate from the app
 analysis above. No worker/server changes were made by this beta.
 
+## Native release artifact
+
+The Windows xcross release build succeeded from source commit
+`d918722ac8582d2bd9f4d24b491902579f232d4d`:
+
+- Bundle: `build/xcross-ios/chatloom.app`, release/AOT.
+- Bundle metadata verified as **2.10.0 (3569)**.
+- The generated Runner sets Flutter's notification delegate after plugin
+  registration. The class lookup is present in the executable, and the bundled
+  plugin library links UserNotifications. This verifies inclusion, not delivery
+  on a physical device.
+- The Windows toolchain did not produce App.framework.dSYM because its
+  dsymutil crashes. This limits crash symbolication; the release build itself
+  completed successfully.
+- Incoming iOS Share extensions remain outside this beta. The CocoaPods-only
+  receive_sharing_intent code is excluded by xcross; this is separate from the
+  clipboard Paste implementation.
+
+In the existing Windows lab, `ios-lab/Install-AppleUxBeta.ps1` prepares the
+runner, synchronizes generated version settings, signs and installs through
+the existing xcross setup. It requires a connected, unlocked iPhone. Keep the
+phone unlocked throughout installation and preserve the existing app/data.
+
+Mac testers can use [the Xcode installation guide](ios-beta-install.md), with
+`feat/apple-ux-paste-beta` as the branch in its clone command. A standard
+Mac/Xcode build of this revision has not been run here.
+
+## Rendered examples
+
 Rendered examples:
 
 - Chats: [dark](ux/apple/inbox-390-dark.png),
