@@ -173,9 +173,9 @@ void main() {
   late PersonalClient personal;
   late InboxController inbox;
 
-  List<Room> order() {
+  List<Room> order({InboxSort sort = InboxSort.latestActivity}) {
     inbox.refresh();
-    return inbox.projection.select(inbox.index);
+    return inbox.projection.select(inbox.index, sort: sort);
   }
 
   DateTime? activity(Room room) => inbox.index.recordFor(room)?.lastActivity;
@@ -279,12 +279,14 @@ void main() {
     await _sync(unread, timeline: [_message('unread', 0)]);
     unread.notificationCount = 1;
     inbox.markChanged(rooms: [unread.id]);
-    expect(order(), [unread, newer, older]);
+    expect(order(), [newer, older, unread]);
+    expect(order(sort: InboxSort.unreadFirst), [unread, newer, older]);
 
     unawaited(older.sendTextEvent('Fictional reply'));
     await pumpEventQueue();
     expect(older.lastEvent!.status, EventStatus.sending);
-    expect(order(), [unread, older, newer]);
+    expect(order(), [older, newer, unread]);
+    expect(order(sort: InboxSort.unreadFirst), [unread, older, newer]);
   });
 
   test('a merged person takes the newest time of its chats', () async {

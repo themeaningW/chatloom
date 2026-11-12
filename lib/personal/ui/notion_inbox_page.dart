@@ -33,6 +33,10 @@ class NotionInboxPage extends StatelessWidget {
   final String? selectedNetwork;
   final InboxFilter selectedView;
   final ValueChanged<InboxFilter>? onViewSelected;
+  final List<PersonalLabel> labels;
+  final String? selectedLabel;
+  final ValueChanged<String>? onLabelSelected;
+  final VoidCallback? onManageLabels;
   final VoidCallback? onManageNetworks;
 
   /// "Mark all as read" in the dock's "Show chats" menu (FX-17).
@@ -73,6 +77,10 @@ class NotionInboxPage extends StatelessWidget {
     this.selectedNetwork,
     this.selectedView = InboxFilter.inbox,
     this.onViewSelected,
+    this.labels = const [],
+    this.selectedLabel,
+    this.onLabelSelected,
+    this.onManageLabels,
     this.onManageNetworks,
     this.onMarkAllRead,
     this.sort = InboxSort.latestActivity,
@@ -127,7 +135,7 @@ class NotionInboxPage extends StatelessWidget {
                 (rowBuilder == null
                     ? [for (final row in rows) row.key]
                     : const []),
-            epoch: (selectedView, selectedNetwork, loading),
+            epoch: (selectedView, selectedLabel, selectedNetwork, loading),
             background: Theme.of(context).scaffoldBackgroundColor,
             child: CustomScrollView(
               controller: scrollController,
@@ -282,6 +290,10 @@ class NotionInboxPage extends StatelessWidget {
                   ),
                   sliver: SliverToBoxAdapter(
                     child: NotionInboxViewChips(
+                      labels: labels,
+                      selectedLabel: selectedLabel,
+                      onLabelSelected: onLabelSelected,
+                      onManageLabels: unavailable ? null : onManageLabels,
                       selected: selectedView,
                       onViewSelected: onViewSelected,
                       unreadCount: unavailable ? 0 : unreadCount,
@@ -331,7 +343,12 @@ class NotionInboxPage extends StatelessWidget {
                     ),
                   ),
                 _SliverFadeOnChange(
-                  signal: (selectedView, selectedNetwork, loading),
+                  signal: (
+                    selectedView,
+                    selectedLabel,
+                    selectedNetwork,
+                    loading,
+                  ),
                   sliver: SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       NotionSpace.inset,

@@ -18,6 +18,7 @@ import 'package:chatloom/pages/chat_list/inbox_keyboard_navigation.dart';
 import 'package:chatloom/pages/chat_list/room_thread_preview.dart';
 import 'package:chatloom/personal/bridge_contact_search.dart'
     show BridgeDirectory;
+import 'package:chatloom/personal/chat_labels.dart';
 import 'package:chatloom/personal/conversation_classification.dart';
 import 'package:chatloom/personal/conversation_shortcuts.dart';
 import 'package:chatloom/personal/hidden_messages.dart';
@@ -35,6 +36,7 @@ import 'package:chatloom/personal/privacy.dart';
 import 'package:chatloom/personal/push_rule_mirror.dart';
 import 'package:chatloom/personal/read_targets.dart';
 import 'package:chatloom/personal/seen_positions.dart';
+import 'package:chatloom/personal/ui/chat_label_sheets.dart';
 import 'package:chatloom/personal/ui/chat_preferences_page.dart';
 import 'package:chatloom/personal/ui/forward_sheet.dart';
 import 'package:chatloom/personal/ui/merge_picker_sheet.dart';
@@ -74,7 +76,7 @@ import '../../widgets/matrix.dart';
 enum ActiveFilter { allChats, unread, groups, messages }
 
 /// The long-press menu of an inbox row, in order (Telegram, Messenger):
-/// Mark as read/unread, Pin/Unpin, Move down/up (an unread chat only),
+/// Labels, Mark as read/unread, Pin/Unpin, Move down/up (an unread chat only),
 /// Mute…/Unmute, Archive/Unarchive, Merge…
 /// (Unmerge on a merged person), Move to Aside/Inbox, Ignore/Restore.
 /// Notification settings are the last row of the Mute menu. Disabled entries
@@ -104,6 +106,15 @@ List<ChatMenuItem<ChatMenuAction>> chatMenuItems(
       sort == InboxSort.unreadFirst && unread && !pinned && !metadata.muted;
   final movedDown = movable && projection.recordFor(room).movedDown;
   return [
+    ChatMenuItem(
+      ChatMenuAction.labels,
+      Icons.label_outline,
+      'Labels…',
+      enabled:
+          joined &&
+          !projection.recordFor(room).technical &&
+          ChatLabels(owner).editable('labels:$entity'),
+    ),
     unread
         ? ChatMenuItem(
             ChatMenuAction.read,
@@ -380,8 +391,15 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
   }
 
   final _personalViews = <String, (InboxFilter, String?)>{};
-  InboxFilter get personalFilter =>
-      _personalViews[inboxAccountKey]?.$1 ?? InboxFilter.inbox;
+  InboxFilter get personalFilter {
+    final saved = _personalViews[inboxAccountKey];
+    if (saved?.$1 == InboxFilter.label &&
+        !ChatLabels(personal).all.any((l) => l.id == saved?.$2)) {
+      return InboxFilter.inbox;
+    }
+    return saved?.$1 ?? InboxFilter.inbox;
+  }
+
   set personalFilter(InboxFilter filter) =>
       _personalViews[inboxAccountKey] = (filter, personalLabel);
   String? get personalLabel => _personalViews[inboxAccountKey]?.$2;
@@ -389,10 +407,18 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
       _personalViews[inboxAccountKey] = (personalFilter, label);
   PersonalClient get personal => PersonalClient.of(Matrix.of(context).client);
   void setPersonalFilter(InboxFilter filter, String? label) => setState(() {
-    personalFilter = filter;
-    personalLabel = label;
+    _personalViews[inboxAccountKey] = (filter, label);
     activeFilter = ActiveFilter.allChats;
   });
+  Future<void> manageLabels() async {
+    final owner = personal;
+    final account = inboxAccountKey;
+    final label = await showChatLabels(context, owner);
+    if (label != null && mounted && _sameInbox(owner, account)) {
+      setPersonalFilter(InboxFilter.label, label);
+    }
+  }
+
   final networkSelections = NotionAccountNetworkSelection();
   String get inboxAccountKey =>
       '${Matrix.of(context).client.clientName}:${Matrix.of(context).client.userID}';
@@ -532,7 +558,12 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
     final index = inbox.index;
     final roomFilter = getRoomFilterByActiveFilter(activeFilter);
     _selection = inbox.projection
-        .select(index, filter: personalFilter, sort: inboxSort)
+        .select(
+          index,
+          filter: personalFilter,
+          sort: inboxSort,
+          labelKey: personalLabel,
+        )
         .where(roomFilter)
         .where(
           (room) =>
@@ -827,6 +858,9 @@ class ChatListController extends State<ChatList> with TickerProviderStateMixin {
     String entity() => InboxProjection(owner).entityFor(room);
 
     switch (action) {
+      case ChatMenuAction.labels:
+        await showChatLabelPicker(context, owner, room);
+        return;
       case ChatMenuAction.open:
         await onChatTap(room);
         return;

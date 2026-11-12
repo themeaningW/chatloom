@@ -443,6 +443,7 @@ void main() {
         item.label,
     ];
     expect(labels(whatsapp), [
+      'Labels…',
       'Mark as unread',
       'Pin',
       'Mute…',
@@ -458,6 +459,7 @@ void main() {
       defaultRoomId: whatsapp.id,
     ).toJson().cast<String, dynamic>();
     expect(labels(telegram), [
+      'Labels…',
       'Mark as unread',
       'Pin',
       'Mute…',
@@ -575,6 +577,7 @@ void main() {
     signal.notificationCount = 2;
     expect(order(), [signal, whatsapp, telegram]);
     expect(labels(signal), [
+      'Labels…',
       'Mark as read',
       'Pin',
       'Move down',

@@ -3,6 +3,23 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Custom labels (3573)
+
+The existing private label model is now available from the inbox's label icon
+and each chat's **Labels…** action. Choose a name, one of sixteen icons and
+any color (palette or custom hue/saturation/brightness). A chat may have
+several labels. Label chips are private filtered views; deleting a label
+keeps conversations and messages. Merged chats inherit source labels until
+the person gets an explicit selection. See [usage and storage](chat-labels.md).
+
+179 focused domain/widget/inbox regressions pass. App analysis has zero
+errors or warnings and 70 existing informational findings. The strict
+design-token no-growth check passes. Production editor captures with fictional
+data were checked in [dark](ux/apple/label-editor-dark.png) and
+[light](ux/apple/label-editor-light.png) modes. Small screens, 2x text and
+keyboard insets are covered by widget tests; physical iPhone acceptance and
+real cross-device sync remain pending.
+
 ## Merged-draft follow-up (build 3570)
 
 The inbox preview and Drafts filter now read the same draft as the conversation

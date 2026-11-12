@@ -395,6 +395,7 @@ class InboxProjection {
       filter: filter,
       sort: sort,
       query: query,
+      labelKey: labelKey,
     );
   }
 
@@ -521,7 +522,10 @@ class InboxProjection {
         ? _legacyLabels(entity).toSet()
         : {
             ...metadata.labelIds,
-            for (final source in sourceRooms) ..._legacyLabels(source.id),
+            for (final source in sourceRooms)
+              ...personal.values.containsKey('labels:${source.id}')
+                  ? _legacyLabels(source.id)
+                  : metadataForEntity(source.id).labelIds,
           };
     final kinds = sourceRooms.map(classifier.classify).toList();
     final unanswered =
@@ -559,12 +563,20 @@ class InboxProjection {
     InboxFilter filter = InboxFilter.inbox,
     InboxSort sort = InboxSort.latestActivity,
     String query = '',
+    String? labelKey,
   }) {
     final records = index.records;
-    // Legacy labels remain stored, but no longer control inbox visibility.
+    if (filter == InboxFilter.label &&
+        (labelKey == null ||
+            personal.values[labelKey]?['name'] is! String ||
+            personal.values[labelKey]?['deleted'] == true)) {
+      return const [];
+    }
+    // Labels select private views; old hide-from-inbox flags remain ignored.
     final visible = projectInbox(
       records,
-      filter: filter == InboxFilter.label ? InboxFilter.inbox : filter,
+      filter: filter,
+      labelKey: labelKey,
       sort: sort,
       query: query,
     );

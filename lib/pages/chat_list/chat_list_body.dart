@@ -5,6 +5,7 @@ import 'package:chatloom/pages/chat_list/chat_list.dart';
 import 'package:chatloom/pages/chat_list/chat_list_item.dart';
 import 'package:chatloom/pages/chat_list/inbox_health_status.dart';
 import 'package:chatloom/pages/chat_list/inbox_pins.dart';
+import 'package:chatloom/personal/chat_labels.dart';
 import 'package:chatloom/personal/hidden_messages.dart';
 import 'package:chatloom/personal/inbox_projection.dart';
 import 'package:chatloom/personal/kept_messages.dart';
@@ -96,6 +97,11 @@ class _ChatListViewBodyState extends State<ChatListViewBody> {
           });
         }
         return NotionInboxPage(
+          labels: usable ? ChatLabels(controller.personal).all : const [],
+          selectedLabel: controller.personalLabel,
+          onLabelSelected: (label) =>
+              controller.setPersonalFilter(InboxFilter.label, label),
+          onManageLabels: controller.manageLabels,
           sort: controller.inboxSort,
           onSortSelected: controller.setInboxSort,
           unreadCount: usable ? controller.unreadViewCount() : 0,
@@ -164,6 +170,8 @@ class _ChatListViewBodyState extends State<ChatListViewBody> {
               ? 'No chats in Aside${controller.selectedNetwork == null ? '' : ' from this network'}. Hold a chat and choose Move to Aside.'
               : controller.selectedNetwork != null
               ? 'No chats from this network in the current view.'
+              : controller.personalFilter == InboxFilter.label
+              ? 'No chats with this label yet. Hold a chat and choose Labels.'
               : controller.personalFilter != InboxFilter.inbox ||
                     controller.activeFilter != ActiveFilter.allChats
               ? 'No chats in ${inboxViewLabel(controller.personalFilter)}. Choose another view or network.'

@@ -29,6 +29,7 @@ enum ChatMenuAction {
   read,
   unread,
   pin,
+  labels,
 
   /// An unread chat leaves the unread-on-top group until its next message
   /// (it stays unread); [moveUp] takes it back.

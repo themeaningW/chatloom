@@ -98,10 +98,14 @@ List<InboxRecord> projectInbox(
     if (filter == InboxFilter.technical) return false;
     if (ignored && filter != InboxFilter.ignored) return false;
     if (!ignored && filter == InboxFilter.ignored) return false;
-    // Aside is a destination, not a group/unread/archive overlay. Pins and
-    // new activity must never bring these chats back into the main views.
+    // Aside stays out of main views. A user's explicit label is an overlay
+    // across destinations and can still find a labelled chat in Aside.
     final aside = placement == ChatPlacement.aside;
-    if (!ignored && aside != (filter == InboxFilter.aside)) return false;
+    if (!ignored &&
+        filter != InboxFilter.label &&
+        aside != (filter == InboxFilter.aside)) {
+      return false;
+    }
     final inInbox =
         placement == ChatPlacement.inbox &&
         !record.metadata.archived &&
