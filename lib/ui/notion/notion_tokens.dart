@@ -118,6 +118,7 @@ abstract final class NotionShapes {
 /// Fixed component and icon dimensions.
 abstract final class NotionSize {
   static const double touchTarget = 48;
+  static const double compactPillHeight = 36;
   static const double composerFieldHeight = 50;
   static const double headerHeight = 56;
   static const double rowMinHeight = 52;

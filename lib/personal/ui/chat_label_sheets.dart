@@ -25,7 +25,72 @@ const chatLabelIcons = <String, IconData>{
   'coffee': Icons.coffee_outlined,
   'health': Icons.health_and_safety_outlined,
   'pets': Icons.pets_outlined,
+  'science': Icons.science_outlined,
+  'math': Icons.calculate_outlined,
+  'finance': Icons.account_balance_outlined,
+  'calendar': Icons.calendar_today_outlined,
+  'library': Icons.library_books_outlined,
+  'writing': Icons.edit_note_outlined,
+  'assignment': Icons.assignment_outlined,
+  'tasks': Icons.task_alt,
+  'computer': Icons.computer_outlined,
+  'phone': Icons.smartphone_outlined,
+  'mail': Icons.mail_outline,
+  'chat': Icons.forum_outlined,
+  'business': Icons.business_outlined,
+  'team': Icons.groups_outlined,
+  'tools': Icons.construction_outlined,
+  'design': Icons.design_services_outlined,
+  'art': Icons.palette_outlined,
+  'camera': Icons.camera_alt_outlined,
+  'photo': Icons.photo_outlined,
+  'video': Icons.videocam_outlined,
+  'movies': Icons.movie_outlined,
+  'games': Icons.sports_esports_outlined,
+  'fitness': Icons.fitness_center_outlined,
+  'swimming': Icons.pool_outlined,
+  'hiking': Icons.hiking_outlined,
+  'cycling': Icons.directions_bike_outlined,
+  'car': Icons.directions_car_outlined,
+  'bus': Icons.directions_bus_outlined,
+  'train': Icons.train_outlined,
+  'world': Icons.public_outlined,
+  'map': Icons.map_outlined,
+  'beach': Icons.beach_access_outlined,
+  'food': Icons.restaurant_outlined,
+  'pizza': Icons.local_pizza_outlined,
+  'cake': Icons.cake_outlined,
+  'gift': Icons.card_giftcard_outlined,
+  'celebration': Icons.celebration_outlined,
+  'nature': Icons.park_outlined,
+  'flowers': Icons.local_florist_outlined,
+  'sun': Icons.wb_sunny_outlined,
+  'moon': Icons.nightlight_outlined,
+  'weather': Icons.cloud_outlined,
+  'water': Icons.water_drop_outlined,
+  'fire': Icons.local_fire_department_outlined,
+  'rocket': Icons.rocket_launch_outlined,
+  'lightbulb': Icons.lightbulb_outline,
+  'bolt': Icons.bolt_outlined,
+  'target': Icons.flag_outlined,
+  'trophy': Icons.emoji_events_outlined,
+  'diamond': Icons.diamond_outlined,
+  'wallet': Icons.account_balance_wallet_outlined,
+  'receipt': Icons.receipt_long_outlined,
+  'cart': Icons.shopping_cart_outlined,
+  'security': Icons.shield_outlined,
+  'key': Icons.key_outlined,
+  'lock': Icons.lock_outline,
+  'bookmark': Icons.bookmark_outline,
+  'folder': Icons.folder_outlined,
+  'link': Icons.link_outlined,
+  'attachment': Icons.attach_file_outlined,
+  'microphone': Icons.mic_none_outlined,
+  'headphones': Icons.headphones_outlined,
+  'language': Icons.translate_outlined,
+  'meditation': Icons.self_improvement_outlined,
 };
+const _quickLabelIconCount = 16;
 IconData chatLabelIcon(String? name) =>
     chatLabelIcons[name] ?? Icons.label_outline;
 Color chatLabelColor(BuildContext context, PersonalLabel label) =>
@@ -231,6 +296,7 @@ class ChatLabelEditor extends StatefulWidget {
 }
 
 class _ChatLabelEditorState extends State<ChatLabelEditor> {
+  bool _moreIcons = false;
   late final _name = TextEditingController(text: widget.label?.name ?? '');
   late String _icon = widget.label?.icon ?? 'label';
   HSVColor? _color;
@@ -377,7 +443,14 @@ class _ChatLabelEditorState extends State<ChatLabelEditor> {
                   spacing: NotionSpace.xxs,
                   runSpacing: NotionSpace.xxs,
                   children: [
-                    for (final entry in chatLabelIcons.entries)
+                    for (final entry in chatLabelIcons.entries.where(
+                      (entry) =>
+                          _moreIcons ||
+                          chatLabelIcons.keys
+                              .take(_quickLabelIconCount)
+                              .contains(entry.key) ||
+                          entry.key == _icon,
+                    ))
                       DecoratedBox(
                         decoration: BoxDecoration(
                           color: _icon == entry.key
@@ -392,11 +465,21 @@ class _ChatLabelEditorState extends State<ChatLabelEditor> {
                             label: 'Icon ${entry.key}',
                             onPressed: _busy
                                 ? null
-                                : () => setState(() => _icon = entry.key),
+                                : () => setState(() {
+                                    _icon = entry.key;
+                                    _moreIcons = false;
+                                  }),
                           ),
                         ),
                       ),
                   ],
+                ),
+                NotionButton.ghost(
+                  label: _moreIcons ? 'View less' : 'View more',
+                  icon: _moreIcons ? Icons.expand_less : Icons.expand_more,
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() => _moreIcons = !_moreIcons),
                 ),
                 const NotionSectionHeader(title: 'Color'),
                 Wrap(

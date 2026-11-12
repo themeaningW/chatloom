@@ -472,6 +472,8 @@ class NotionGlassMenuRow extends StatelessWidget {
 /// Blurs only when [blur] is true; keep it false unless the pill floats over
 /// scrolling content as fixed chrome (scroll-to-bottom, a floating action).
 class NotionGlassPill extends StatelessWidget {
+  /// Slimmer visible filter surface; the complete 48-pixel target still taps.
+  final bool compact;
   final IconData? icon;
   final String? label;
   final VoidCallback? onPressed;
@@ -491,6 +493,7 @@ class NotionGlassPill extends StatelessWidget {
     this.selected = false,
     this.blur = false,
     this.trailing,
+    this.compact = false,
   }) : assert(icon != null || label != null, 'Pass an icon or a label');
 
   @override
@@ -499,7 +502,7 @@ class NotionGlassPill extends StatelessWidget {
     final iconOnly = label == null;
     Widget content = Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: iconOnly ? NotionSpace.sm : NotionSpace.md,
+        horizontal: iconOnly || compact ? NotionSpace.sm : NotionSpace.md,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -526,10 +529,13 @@ class NotionGlassPill extends StatelessWidget {
     );
     content = InkWell(
       onTap: onPressed,
+      excludeFromSemantics: compact,
       customBorder: NotionShapes.pill,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minHeight: NotionSize.touchTarget,
+        constraints: BoxConstraints(
+          minHeight: compact
+              ? NotionSize.compactPillHeight
+              : NotionSize.touchTarget,
           minWidth: NotionSize.touchTarget,
         ),
         // The content presses inside the ink, like the dock, so the pill
@@ -537,7 +543,11 @@ class NotionGlassPill extends StatelessWidget {
         child: NotionPressable(
           enabled: onPressed != null,
           scale: iconOnly ? NotionMotion.pressIcon : NotionMotion.pressButton,
-          child: Center(widthFactor: 1, child: content),
+          child: Center(
+            widthFactor: 1,
+            heightFactor: compact ? 1 : null,
+            child: content,
+          ),
         ),
       ),
     );
@@ -553,11 +563,32 @@ class NotionGlassPill extends StatelessWidget {
     }
     final tooltip = this.tooltip;
     if (tooltip != null) pill = Tooltip(message: tooltip, child: pill);
+    if (compact) {
+      pill = GestureDetector(
+        excludeFromSemantics: true,
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: NotionSize.touchTarget,
+            minWidth: NotionSize.touchTarget,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical:
+                  (NotionSize.touchTarget - NotionSize.compactPillHeight) / 2,
+            ),
+            child: pill,
+          ),
+        ),
+      );
+    }
     return Semantics(
       button: true,
       enabled: onPressed != null,
       selected: selected,
       label: iconOnly ? tooltip : null,
+      onTap: compact ? onPressed : null,
       child: pill,
     );
   }

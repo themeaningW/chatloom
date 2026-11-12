@@ -328,6 +328,47 @@ void main() {
     },
   );
   testWidgets(
+    'View more selects and persists an icon outside the quick palette',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      expect(chatLabelIcons.length, 80);
+      await tester.pumpWidget(host());
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Icon rocket'), findsNothing);
+      await tester.enterText(
+        find.byKey(const ValueKey('label-name')),
+        'Research',
+      );
+      await tester.ensureVisible(find.text('View more'));
+      await tester.tap(find.text('View more'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Icon rocket'), findsOneWidget);
+      await _capture(tester, 'label-more-icons');
+      await tester.ensureVisible(find.byTooltip('Icon rocket'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Icon rocket'));
+      await tester.pumpAndSettle();
+      expect(find.text('View more'), findsOneWidget);
+      expect(find.byTooltip('Icon rocket'), findsOneWidget);
+      await tester.ensureVisible(find.text('Save'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(labels.all.single.icon, 'rocket');
+      await tester.pumpWidget(host(edit: labels.all.single));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Icon rocket'), findsOneWidget);
+      expect(find.text('View more'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'picker applies several labels without overwriting another device membership',
     (tester) async {
       final a = await labels.create('A'),

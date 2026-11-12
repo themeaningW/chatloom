@@ -10,6 +10,9 @@ folder model or native Matrix Space creation.
 1. In the inbox, tap the label icon beside the view chips, then **New label**.
 2. Choose your own name, icon and color. **Custom color** opens hue,
    saturation and brightness controls. Tap **Save**.
+   The quick palette has 16 icons; **View more** opens all 80. Selecting an
+   icon collapses the palette again. A selected extra icon stays visible in
+   the quick palette when editing, and its existing string ID syncs normally.
 3. Hold a chat, choose **Labels…**, select one or more labels and **Save**.
 4. Tap a label chip to see its chats. The label icon also opens a complete
    list when there are too many chips. Its pencil edits a label's name,

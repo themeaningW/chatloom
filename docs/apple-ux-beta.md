@@ -3,6 +3,37 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Pull-down search and compact filters (3578)
+
+Search starts hidden above the inbox content. Pull the list down from its top
+to reveal the search panel, then tap it to open the existing full search.
+Scrolling up hides the panel naturally. A lower-right magnifier opens the same
+search directly from any scroll position. Chats/settings stay in the fixed
+header; network and sort controls retain their order at the top of the content.
+Bottom clearance keeps the last conversation above the magnifier at list end.
+
+All/Unread/Groups/Aside and label chips use a 36-pixel visible pill with tighter
+horizontal padding and the same complete 48-pixel tap target. Large text may
+grow the surface. Other button defaults remain unchanged.
+
+The label editor keeps its 16-icon quick palette and offers **View more** for
+all 80 icons. Choosing one collapses the palette and retains that extra icon
+in the quick selection when editing again. Existing icon IDs and private label
+storage are unchanged. See [the expanded picker](ux/apple/label-more-icons.png).
+
+79 focused regressions pass, including real iOS/Android scroll physics, middle
+versus top pulls, both search entries, sort access, last-row clearance, compact
+tap margins, large text, label persistence, inbox lifecycle and list motion.
+Full analysis has zero errors/warnings; final changed-file analysis is clean,
+with 70 existing informational findings elsewhere. The strict design-token
+check passes. New compact-pill goldens were inspected in dark/light, and the
+production inbox fixture was captured with search
+[hidden](ux/apple/inbox-search-hidden-dark.png) and
+[revealed](ux/apple/inbox-search-revealed-dark.png), also in
+[light](ux/apple/inbox-search-revealed-light.png). The separate presentation
+harness still lacks its external source-snapshot prerequisite; full-app
+fixtures supplied these captures. Physical-device acceptance remains pending.
+
 ## Automatic report screenshots (3577)
 
 Both shake and manual **Report a problem** capture the visible Flutter app

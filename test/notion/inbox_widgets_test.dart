@@ -147,7 +147,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.byType(NotionInboxDock), findsNothing);
-        await tester.tap(find.text('Search'));
+        await tester.tap(find.byKey(const ValueKey('inbox_search_fab')));
         expect(searches, 1);
         scroll.jumpTo(scroll.position.maxScrollExtent);
         await tester.pumpAndSettle();
@@ -225,14 +225,14 @@ void main() {
     expect(find.text('Saved pin'), findsNothing);
     expect(find.text('75'), findsNothing);
     expect(find.text('Requests'), findsNothing);
-    await tester.tap(find.text('Search'));
+    await tester.tap(find.byKey(const ValueKey('inbox_search_fab')));
     expect(searches, 0);
     await tester.pumpWidget(host(page(false)));
     await tester.pumpAndSettle();
     expect(find.byType(NotionSkeleton), findsNothing);
     expect(find.text('Saved chat preview'), findsOneWidget);
     expect(find.text('Saved pin'), findsOneWidget);
-    await tester.tap(find.text('Search'));
+    await tester.tap(find.byKey(const ValueKey('inbox_search_fab')));
     expect(searches, 1);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -682,7 +682,7 @@ void main() {
         tester.getBottomLeft(find.byTooltip('New message')).dy,
         lessThan(568),
       );
-      scroll.jumpTo(0);
+      scroll.jumpTo(scroll.position.minScrollExtent);
       await tester.pumpAndSettle();
       expect(find.text('Search'), findsOneWidget);
       final searchText = tester.widget<Text>(find.text('Search'));

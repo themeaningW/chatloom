@@ -10,8 +10,13 @@ next decision. Avoid redundant icon-and-text pairs, ornamental controls and
 dense rows of simultaneous actions; reveal secondary actions when needed.
 
 The user-authorized beta replaces the production floating inbox dock and
-full-width accent unread cards with a solid header, visible search, neutral
-conversation rows and restrained unread indicators. Keep the existing tokens
+full-width accent unread cards with a solid header, neutral conversation rows
+and restrained unread indicators. Search stays hidden above the start of the
+list until the user pulls down; a fixed lower-right magnifier opens the same
+search directly. Network and sort controls remain at the top of the content.
+Filter pills use `NotionGlassPill(compact: true)`: a 36-pixel visible surface
+with a full 48-pixel tap target;
+large text may grow the surface. Keep the existing tokens
 and adaptive shared Flutter UI; do not fork feature implementations for iOS.
 The system text face is used on iOS/macOS with bundled Roboto fallback on other
 hosts. Reading text is 17 logical pixels, page titles 34, and controls retain

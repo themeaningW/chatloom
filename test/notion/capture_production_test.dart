@@ -99,7 +99,7 @@ Widget _host(Widget child, {double scale = 1, double keyboard = 0}) =>
       ),
     );
 
-Widget _inbox({bool empty = false, int extraPins = 0}) {
+Widget _inbox({bool empty = false, int extraPins = 0, bool withLabels = false}) {
   const names = ['Anna', 'Michael', 'Team', 'Ola', 'Family', 'Project', 'Kuba'];
   const previews = [
     'Coffee tomorrow at 5?',
@@ -169,6 +169,7 @@ Widget _inbox({bool empty = false, int extraPins = 0}) {
             ],
       onSettings: _noop,
       onSearch: _noop,
+      onManageLabels: withLabels ? _noop : null,
       onNetworkSelected: (_) {},
       networks: const ['whatsapp', 'slack', 'messenger', 'instagram'],
     ),
@@ -550,6 +551,27 @@ void main() {
     icons.addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
     await icons.load();
   });
+  testWidgets('capture production pull search', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(_host(_inbox(withLabels: true)));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notion_dock_search')).hitTestable(),
+      findsNothing,
+    );
+    await _save(tester, 'inbox-pull-search-hidden');
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 160));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notion_dock_search')).hitTestable(),
+      findsOneWidget,
+    );
+    await _save(tester, 'inbox-pull-search-revealed', scrollToTop: false);
+  });
+
   testWidgets('capture production five screens and adaptive states', (
     tester,
   ) async {

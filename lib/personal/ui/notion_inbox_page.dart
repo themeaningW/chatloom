@@ -110,7 +110,8 @@ class NotionInboxPage extends StatelessWidget {
         : rowBuilder == null
         ? rows.length
         : rowCount ?? 0;
-    final bottomClearance = safe.bottom + NotionSpace.xl;
+    final bottomClearance =
+        safe.bottom + NotionSpace.xl + NotionSize.touchTarget + NotionSpace.md;
     final showPins = !unavailable && pins.isNotEmpty;
     final emptyText =
         emptyMessage ??
@@ -121,294 +122,283 @@ class NotionInboxPage extends StatelessWidget {
     // unobscured; the network selector uses the shared anchored popup.
     return BackdropGroup(
       child: Scaffold(
-        // No floating navigation covers the last conversation or a snackbar.
         extendBody: false,
+        floatingActionButton: SizedBox.square(
+          key: const ValueKey('inbox_search_fab'),
+          dimension: NotionSize.touchTarget,
+          child: NotionGlassPill(
+            icon: Icons.search,
+            tooltip: 'Search chats and messages',
+            onPressed: unavailable ? null : onSearch,
+          ),
+        ),
         // The first screenful of pins and rows rises in once per page; rows
         // built later by scrolling or filtering appear as they are.
-        body: NotionEntranceScope(
-          // A chat that moves (new message) glides to its place while the
-          // rows it passes slide aside; another view or network, or the end
-          // of the first load, swaps the list without motion.
-          child: NotionListMotion(
-            order:
-                rowOrder ??
-                (rowBuilder == null
-                    ? [for (final row in rows) row.key]
-                    : const []),
-            epoch: (selectedView, selectedLabel, selectedNetwork, loading),
-            background: Theme.of(context).scaffoldBackgroundColor,
-            child: CustomScrollView(
-              controller: scrollController,
-              slivers: [
-                PinnedHeaderSliver(
-                  child: ColoredBox(
-                    color: context.notion.colors.background,
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        NotionSpace.inset,
-                        safe.top + NotionSpace.xs,
-                        NotionSpace.inset,
-                        NotionSpace.xs,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Chats',
-                                  style: context.notion.typography.title,
-                                ),
-                              ),
-                              _InboxToolbarButton(
-                                key: const ValueKey('notion_dock_settings'),
-                                label: 'Settings',
-                                icon: Icons.settings_outlined,
-                                onPressed: onSettings,
-                              ),
-                              _InboxToolbarButton(
-                                key: const ValueKey('inbox_new_message'),
-                                label: 'New message',
-                                icon: Icons.edit_square,
-                                onPressed: unavailable ? null : onSearch,
-                              ),
-                            ],
-                          ),
-                          _RetainedReveal(
-                            revealOnMount: false,
-                            child: headerStatus,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                    NotionSpace.inset,
-                    NotionSpace.xxs,
-                    NotionSpace.inset,
-                    NotionSpace.sm,
-                  ),
-                  sliver: SliverToBoxAdapter(
-                    child: _InboxSearchButton(
-                      onPressed: unavailable ? null : onSearch,
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: NotionSpace.page,
-                  sliver: SliverToBoxAdapter(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _InboxNetworkPicker(
-                            networks: networks,
-                            selectedNetwork: selectedNetwork,
-                            selectedView: selectedView,
-                            onNetworkSelected: onNetworkSelected,
-                            onViewSelected: onViewSelected,
-                            onManageNetworks: onManageNetworks,
-                            onMarkAllRead: unavailable ? null : onMarkAllRead,
-                          ),
-                        ),
-                        if (onSortSelected != null)
-                          _InboxToolbarButton(
-                            key: const ValueKey('inbox_sort'),
-                            label: 'Sort chats',
-                            icon: Icons.sort,
-                            onPressed: () async {
-                              final choice = await showNotionChoiceSheet<InboxSort>(
-                                context,
-                                title: 'Sort chats',
-                                selected: sort,
-                                options: const [
-                                  NotionChoice(
-                                    InboxSort.latestActivity,
-                                    'Latest activity',
-                                    subtitle: 'Newest changes first',
-                                  ),
-                                  NotionChoice(
-                                    InboxSort.oldestActivity,
-                                    'Oldest activity',
-                                    subtitle: 'Oldest changes first',
-                                  ),
-                                  NotionChoice(
-                                    InboxSort.unreadFirst,
-                                    'Unread first',
-                                    subtitle:
-                                        'Unread chats first, then latest activity',
-                                  ),
-                                ],
-                              );
-                              if (choice != null && choice.value != sort) {
-                                onSortSelected?.call(choice.value);
-                              }
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (status != null)
-                  SliverPadding(
-                    padding: NotionSpace.page,
-                    sliver: SliverToBoxAdapter(child: status),
-                  ),
-                // Pins grow in and out instead of jumping.
-                SliverToBoxAdapter(
-                  child: _RetainedReveal(
-                    revealOnMount: false,
-                    child: showPins
-                        ? Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              NotionSpace.inset,
-                              NotionSpace.sm,
-                              NotionSpace.inset,
-                              0,
-                            ),
-                            child: NotionEntrance(
-                              rise: NotionMotion.riseList,
-                              child: NotionPinnedShortcuts(
-                                pins: pins,
-                                onReorder: onReorderPins,
-                              ),
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                // One-tap views (UX-16) instead of a second large title; the
-                // same state as the dock's "Show chats" menu.
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    NotionSpace.inset,
-                    showPins ? NotionSpace.md : NotionSpace.sm,
-                    NotionSpace.inset,
-                    NotionSpace.xs,
-                  ),
-                  sliver: SliverToBoxAdapter(
-                    child: NotionInboxViewChips(
-                      labels: labels,
-                      selectedLabel: selectedLabel,
-                      onLabelSelected: onLabelSelected,
-                      onManageLabels: unavailable ? null : onManageLabels,
-                      selected: selectedView,
-                      onViewSelected: onViewSelected,
-                      unreadCount: unavailable ? 0 : unreadCount,
-                      requestCount: unavailable ? 0 : requestCount,
-                    ),
-                  ),
-                ),
-                if (loading)
-                  SliverPadding(
-                    padding: NotionSpace.page,
-                    sliver: SliverToBoxAdapter(
-                      child: Semantics(
-                        label: 'Loading chats',
-                        child: ExcludeSemantics(
-                          child: NotionSkeleton(
-                            child: Column(
-                              children: List.filled(
-                                _skeletonRows,
-                                const NotionSkeletonRow(),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                if (!loading && count == 0)
-                  SliverToBoxAdapter(
-                    child: NotionFadeThrough(
-                      alignment: AlignmentDirectional.topCenter,
-                      child: NotionEmptyState(
-                        key: ValueKey(emptyText),
-                        icon: onRetryLoading == null
-                            ? Icons.chat_bubble_outline
-                            : Icons.storage_outlined,
-                        title: onRetryLoading == null
-                            ? emptyText
-                            : 'Saved chats could not be loaded',
-                        message: onRetryLoading == null ? null : emptyText,
-                        action: onRetryLoading == null
-                            ? null
-                            : NotionButton(
-                                label: 'Retry',
-                                onPressed: onRetryLoading,
-                              ),
-                      ),
-                    ),
-                  ),
-                _SliverFadeOnChange(
-                  signal: (
+        body: Column(
+          children: [
+            _InboxHeader(
+              onSettings: onSettings,
+              onSearch: unavailable ? null : onSearch,
+              status: headerStatus,
+            ),
+            Expanded(
+              child: NotionEntranceScope(
+                // A chat that moves (new message) glides to its place while the
+                // rows it passes slide aside; another view or network, or the end
+                // of the first load, swaps the list without motion.
+                child: NotionListMotion(
+                  order:
+                      rowOrder ??
+                      (rowBuilder == null
+                          ? [for (final row in rows) row.key]
+                          : const []),
+                  epoch: (
                     selectedView,
                     selectedLabel,
                     selectedNetwork,
                     loading,
                   ),
-                  sliver: SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      NotionSpace.inset,
-                      0,
-                      NotionSpace.inset,
-                      bottomClearance,
-                    ),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final row = builder(context, index);
-                          // Same key as the row, so reordering keeps elements
-                          // (a GlobalKey keeps its element on its own).
-                          final key = row.key;
-                          return NotionListMotionItem(
-                            key: key is GlobalKey ? null : key,
-                            index: index,
-                            // The gap belongs to the item, so reorder offsets
-                            // include it and highlights never touch.
-                            child: Padding(
-                              padding: NotionSpace.listItem,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  NotionEntrance(
-                                    playKey: row.key,
+                  background: Theme.of(context).scaffoldBackgroundColor,
+                  child: CustomScrollView(
+                    controller: scrollController,
+                    center: const ValueKey('inbox_network_start'),
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(
+                          NotionSpace.inset,
+                          NotionSpace.xxs,
+                          NotionSpace.inset,
+                          NotionSpace.sm,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: _InboxSearchButton(
+                            onPressed: unavailable ? null : onSearch,
+                          ),
+                        ),
+                      ),
+                      SliverPadding(
+                        key: const ValueKey('inbox_network_start'),
+                        padding: NotionSpace.page,
+                        sliver: SliverToBoxAdapter(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _InboxNetworkPicker(
+                                  networks: networks,
+                                  selectedNetwork: selectedNetwork,
+                                  selectedView: selectedView,
+                                  onNetworkSelected: onNetworkSelected,
+                                  onViewSelected: onViewSelected,
+                                  onManageNetworks: onManageNetworks,
+                                  onMarkAllRead: unavailable
+                                      ? null
+                                      : onMarkAllRead,
+                                ),
+                              ),
+                              if (onSortSelected != null)
+                                _InboxToolbarButton(
+                                  key: const ValueKey('inbox_sort'),
+                                  label: 'Sort chats',
+                                  icon: Icons.sort,
+                                  onPressed: () async {
+                                    final choice =
+                                        await showNotionChoiceSheet<InboxSort>(
+                                          context,
+                                          title: 'Sort chats',
+                                          selected: sort,
+                                          options: const [
+                                            NotionChoice(
+                                              InboxSort.latestActivity,
+                                              'Latest activity',
+                                              subtitle: 'Newest changes first',
+                                            ),
+                                            NotionChoice(
+                                              InboxSort.oldestActivity,
+                                              'Oldest activity',
+                                              subtitle: 'Oldest changes first',
+                                            ),
+                                            NotionChoice(
+                                              InboxSort.unreadFirst,
+                                              'Unread first',
+                                              subtitle:
+                                                  'Unread chats first, then latest activity',
+                                            ),
+                                          ],
+                                        );
+                                    if (choice != null &&
+                                        choice.value != sort) {
+                                      onSortSelected?.call(choice.value);
+                                    }
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (status != null)
+                        SliverPadding(
+                          padding: NotionSpace.page,
+                          sliver: SliverToBoxAdapter(child: status),
+                        ),
+                      // Pins grow in and out instead of jumping.
+                      SliverToBoxAdapter(
+                        child: _RetainedReveal(
+                          revealOnMount: false,
+                          child: showPins
+                              ? Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    NotionSpace.inset,
+                                    NotionSpace.sm,
+                                    NotionSpace.inset,
+                                    0,
+                                  ),
+                                  child: NotionEntrance(
                                     rise: NotionMotion.riseList,
-                                    child: row,
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsetsDirectional.only(
-                                      start:
-                                          NotionSize.avatarLg +
-                                          NotionSpace.xs +
-                                          NotionSpace.sm,
-                                    ),
-                                    child: Divider(
-                                      height: 1,
-                                      thickness: .5,
-                                      color: context.notion.colors.border,
+                                    child: NotionPinnedShortcuts(
+                                      pins: pins,
+                                      onReorder: onReorderPins,
                                     ),
                                   ),
-                                ],
+                                )
+                              : null,
+                        ),
+                      ),
+                      // One-tap views (UX-16) instead of a second large title; the
+                      // same state as the dock's "Show chats" menu.
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          NotionSpace.inset,
+                          showPins ? NotionSpace.md : NotionSpace.sm,
+                          NotionSpace.inset,
+                          NotionSpace.xs,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: NotionInboxViewChips(
+                            labels: labels,
+                            selectedLabel: selectedLabel,
+                            onLabelSelected: onLabelSelected,
+                            onManageLabels: unavailable ? null : onManageLabels,
+                            selected: selectedView,
+                            onViewSelected: onViewSelected,
+                            unreadCount: unavailable ? 0 : unreadCount,
+                            requestCount: unavailable ? 0 : requestCount,
+                          ),
+                        ),
+                      ),
+                      if (loading)
+                        SliverPadding(
+                          padding: NotionSpace.page,
+                          sliver: SliverToBoxAdapter(
+                            child: Semantics(
+                              label: 'Loading chats',
+                              child: ExcludeSemantics(
+                                child: NotionSkeleton(
+                                  child: Column(
+                                    children: List.filled(
+                                      _skeletonRows,
+                                      const NotionSkeletonRow(),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          );
-                        },
-                        childCount: count,
-                        findChildIndexCallback: rowIndexOf ?? _indexOfRow,
-                        // The motion item adds the boundary and semantic
-                        // index itself; it must sit directly in the list.
-                        addRepaintBoundaries: false,
-                        addSemanticIndexes: false,
+                          ),
+                        ),
+                      if (!loading && count == 0)
+                        SliverToBoxAdapter(
+                          child: NotionFadeThrough(
+                            alignment: AlignmentDirectional.topCenter,
+                            child: NotionEmptyState(
+                              key: ValueKey(emptyText),
+                              icon: onRetryLoading == null
+                                  ? Icons.chat_bubble_outline
+                                  : Icons.storage_outlined,
+                              title: onRetryLoading == null
+                                  ? emptyText
+                                  : 'Saved chats could not be loaded',
+                              message: onRetryLoading == null
+                                  ? null
+                                  : emptyText,
+                              action: onRetryLoading == null
+                                  ? null
+                                  : NotionButton(
+                                      label: 'Retry',
+                                      onPressed: onRetryLoading,
+                                    ),
+                            ),
+                          ),
+                        ),
+                      _SliverFadeOnChange(
+                        signal: (
+                          selectedView,
+                          selectedLabel,
+                          selectedNetwork,
+                          loading,
+                        ),
+                        sliver: SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            NotionSpace.inset,
+                            0,
+                            NotionSpace.inset,
+                            bottomClearance,
+                          ),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final row = builder(context, index);
+                                // Same key as the row, so reordering keeps elements
+                                // (a GlobalKey keeps its element on its own).
+                                final key = row.key;
+                                return NotionListMotionItem(
+                                  key: key is GlobalKey ? null : key,
+                                  index: index,
+                                  // The gap belongs to the item, so reorder offsets
+                                  // include it and highlights never touch.
+                                  child: Padding(
+                                    padding: NotionSpace.listItem,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        NotionEntrance(
+                                          playKey: row.key,
+                                          rise: NotionMotion.riseList,
+                                          child: row,
+                                        ),
+                                        Padding(
+                                          padding:
+                                              const EdgeInsetsDirectional.only(
+                                                start:
+                                                    NotionSize.avatarLg +
+                                                    NotionSpace.xs +
+                                                    NotionSpace.sm,
+                                              ),
+                                          child: Divider(
+                                            height: 1,
+                                            thickness: .5,
+                                            color: context.notion.colors.border,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                              childCount: count,
+                              findChildIndexCallback: rowIndexOf ?? _indexOfRow,
+                              // The motion item adds the boundary and semantic
+                              // index itself; it must sit directly in the list.
+                              addRepaintBoundaries: false,
+                              addSemanticIndexes: false,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -417,6 +407,50 @@ class NotionInboxPage extends StatelessWidget {
 
 /// Placeholder rows while the first inbox load runs (about one screenful).
 const _skeletonRows = 8;
+
+class _InboxHeader extends StatelessWidget {
+  const _InboxHeader({required this.onSettings, this.onSearch, this.status});
+  final VoidCallback onSettings;
+  final VoidCallback? onSearch;
+  final Widget? status;
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: context.notion.colors.background,
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        NotionSpace.inset,
+        MediaQuery.paddingOf(context).top + NotionSpace.xs,
+        NotionSpace.inset,
+        NotionSpace.xs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Chats', style: context.notion.typography.title),
+              ),
+              _InboxToolbarButton(
+                key: const ValueKey('notion_dock_settings'),
+                label: 'Settings',
+                icon: Icons.settings_outlined,
+                onPressed: onSettings,
+              ),
+              _InboxToolbarButton(
+                key: const ValueKey('inbox_new_message'),
+                label: 'New message',
+                icon: Icons.edit_square,
+                onPressed: onSearch,
+              ),
+            ],
+          ),
+          _RetainedReveal(revealOnMount: false, child: status),
+        ],
+      ),
+    ),
+  );
+}
 
 class _InboxToolbarButton extends StatelessWidget {
   const _InboxToolbarButton({

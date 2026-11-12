@@ -122,6 +122,7 @@ class _NotionInboxViewChipsState extends State<NotionInboxViewChips> {
                   for (final (index, view) in views.indexed) ...[
                     if (index > 0) const SizedBox(width: NotionSpace.xs),
                     NotionGlassPill(
+                      compact: true,
                       key: ValueKey('notion_inbox_chip_${view.name}'),
                       label: notionInboxChipLabel(view),
                       selected: view == selected,
@@ -184,6 +185,7 @@ class _NotionInboxViewChipsState extends State<NotionInboxViewChips> {
                           ? _selectedLabelAnchor
                           : null,
                       child: NotionGlassPill(
+                        compact: true,
                         key: ValueKey('notion_label_chip:${label.id}'),
                         label: label.name,
                         selected:
