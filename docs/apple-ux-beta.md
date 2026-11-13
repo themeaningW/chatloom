@@ -3,6 +3,48 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Network changes and frequently used reactions (3582)
+
+Merged conversations replace repeated visible **via Messenger/WhatsApp**
+captions with a small centered network logo, shown only at a known change of
+network in chronological message order. Replies, sender changes, date/time
+gaps and different rooms on the same network do not repeat it. Service lines
+and hidden album members are skipped. Missing network metadata breaks the
+comparison without guessing; older history can reveal a real transition.
+Adding that marker preserves the existing message/media subtree. Isolated
+search results retain their source captions.
+
+**Settings → Chats → Reaction picker → Frequently used** switches the full
+reaction picker to one personal usage-ranked section with Search and Reset.
+Equal counts use recency; existing local emoji history carries over. Search
+still includes every emoji permitted by the chat, including choices not yet
+used. Reset clears usage without changing skin tones, picker mode or the
+configured quick-reaction bar. The composer retains its complete picker.
+Accepted reaction adds count once through the quick bar, full picker and
+double tap; canceled, removed, rejected or pending reactions do not count.
+
+Production fixtures were inspected in both appearances:
+[network changes, dark](ux/apple/conversation-network-changes-dark.png),
+[light](ux/apple/conversation-network-changes-light.png), and
+[frequent reactions, dark](ux/apple/frequent-emoji-dark-390.png),
+[light](ux/apple/frequent-emoji-light-390.png).
+These use fictional messages and Windows fonts; physical iPhone acceptance
+of this revision remains pending.
+
+97 focused regressions pass (38 timeline/grouping and 59 emoji/settings/
+reaction tests), covering known/unknown networks, deleted and service rows,
+albums, pagination, message identity, frequency ranking, allowed reactions,
+usage guards, Reset, persistence, search and 2x text. The two existing picker
+primitive goldens were refreshed to the current theme/Windows render and
+visually reviewed. The strict design-token check passes. The separate
+presentation harness still lacks its external source-snapshot prerequisite;
+the captures above use the production app widgets instead.
+
+Full app and changed-test analysis has zero errors/warnings and the same 70
+existing infos. The focused modules/tests pass with fatal infos enabled; the
+general merged host retains its four pre-existing infos, also confirmed
+against the preceding build's analysis.
+
 ## Edge-aligned inbox (3581)
 
 The header, hidden search panel and filter controls use a 16-point horizontal

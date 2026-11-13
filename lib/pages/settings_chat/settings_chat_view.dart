@@ -154,6 +154,19 @@ class SettingsChatView extends StatelessWidget {
               controller.updateState();
             },
           ),
+          NotionPickerRow<bool>(
+            key: const Key('settings_reaction_picker'),
+            label: 'Reaction picker',
+            value: AppSettings.reactionsFrequentlyUsed.value,
+            options: const [
+              NotionChoice(false, 'All emoji'),
+              NotionChoice(true, 'Frequently used'),
+            ],
+            onChanged: (value) => _saveSetting(
+              context,
+              () => AppSettings.reactionsFrequentlyUsed.setItem(value),
+            ),
+          ),
           if (AppSettings.doubleTapToReact.value)
             NotionListRow(
               key: const Key('settings_double_tap_reaction_row'),

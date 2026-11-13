@@ -87,6 +87,13 @@ enum AppSettings<T> {
   /// keep only what they allow.
   quickReactions<String>('pl.personal.chat.quick_reactions', ''),
 
+  /// Browse only personal frequently used emoji in reaction pickers.
+  /// Search still includes every reaction allowed by the current network.
+  reactionsFrequentlyUsed<bool>(
+    'pl.personal.chat.reactions_frequent_only',
+    false,
+  ),
+
   /// Prefetch voice notes and round videos (ciphertext into the encrypted
   /// media cache) as soon as a chat is open, so playback starts instantly.
   personalAutoDownloadVoiceRounds<bool>(

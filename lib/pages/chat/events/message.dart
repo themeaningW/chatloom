@@ -80,10 +80,6 @@ class Message extends StatelessWidget {
   /// null the row resolves it itself (slower: parses person groups per row).
   final ({ChatTheme? theme})? roomPalette;
 
-  /// Heading over the first message of a series instead of the sender name,
-  /// e.g. the source network in a merged person chat.
-  final String? sourceLabel;
-
   /// Series breaks the list cannot see (hidden source state events).
   final bool Function(Event event)? seriesBoundary;
 
@@ -118,7 +114,6 @@ class Message extends StatelessWidget {
     required this.enterThread,
     this.isCollapsed = false,
     this.roomPalette,
-    this.sourceLabel,
     this.seriesBoundary,
     this.strictCapabilities = false,
     super.key,
@@ -512,16 +507,6 @@ class Message extends StatelessWidget {
                 avatar: _SenderAvatar(event: event, onMention: onMention),
                 heading: !first
                     ? null
-                    : sourceLabel != null
-                    ? ConversationMetaChip(
-                        backdrop: metaBackdrop,
-                        child: Text(
-                          sourceLabel!,
-                          style: NotionType.caption.copyWith(
-                            color: statusColor,
-                          ),
-                        ),
-                      )
                     // A reply caption already names the sender.
                     : !own &&
                           !isReply &&

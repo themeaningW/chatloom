@@ -4,6 +4,7 @@ import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/l10n/l10n.dart';
 import 'package:chatloom/pages/settings_chat/settings_chat.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
+import 'package:chatloom/utils/platform_infos.dart';
 import 'package:chatloom/widgets/settings_switch_list_tile.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -23,6 +24,7 @@ void main() {
       AppSettings.messagePreviewMaxLines,
       AppSettings.emojiSuggestionLocale,
       AppSettings.displayChatDetailsColumn,
+      AppSettings.reactionsFrequentlyUsed,
     ]) {
       await AppSettings.store.remove(setting.key);
     }
@@ -93,6 +95,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('reaction picker choice saves and survives reopening Settings', (
+    tester,
+  ) async {
+    await mount(tester);
+    final row = find.byKey(const Key('settings_reaction_picker'));
+    expect(AppSettings.reactionsFrequentlyUsed.value, isFalse);
+    await tester.ensureVisible(row);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Frequently used'));
+    await tester.pumpAndSettle();
+    expect(AppSettings.reactionsFrequentlyUsed.value, isTrue);
+    expect(
+      AppSettings.store.getBool(AppSettings.reactionsFrequentlyUsed.key),
+      isTrue,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await mount(tester);
+    expect(find.text('Frequently used'), findsOneWidget);
+    await tester.ensureVisible(row);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All emoji'));
+    await tester.pumpAndSettle();
+    expect(AppSettings.reactionsFrequentlyUsed.value, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'emoji language keeps custom values until a supported choice is saved',
     (tester) async {
@@ -115,7 +145,7 @@ void main() {
   );
 
   testWidgets(
-    'desktop details preference is saved for subsequently opened chats',
+    'desktop details preference follows platform support and saves when shown',
     (tester) async {
       await mount(tester);
       final row = find.byWidgetPredicate(
@@ -123,12 +153,21 @@ void main() {
             widget is SettingsSwitchListTile &&
             widget.setting == AppSettings.displayChatDetailsColumn,
       );
-      expect(row, findsOneWidget);
       expect(AppSettings.displayChatDetailsColumn.value, isFalse);
+      if (!PlatformInfos.isDesktop && !PlatformInfos.isWeb) {
+        expect(row, findsNothing);
+        expect(tester.takeException(), isNull);
+        return;
+      }
+      expect(row, findsOneWidget);
       await tester.ensureVisible(row);
       await tester.tap(row);
       await tester.pumpAndSettle();
       expect(AppSettings.displayChatDetailsColumn.value, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await mount(tester);
+      expect(AppSettings.displayChatDetailsColumn.value, isTrue);
+      expect(row, findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

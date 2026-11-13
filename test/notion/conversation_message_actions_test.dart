@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/pages/chat/conversation_message_actions.dart';
+import 'package:chatloom/personal/emoji/emoji_catalog.dart';
 import 'package:chatloom/widgets/matrix.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/models/timeline_chunk.dart';
@@ -15,13 +17,12 @@ import 'conversation_test_support.dart';
 class _Reaction extends Event {
   int removals = 0;
   Object? removalFailure;
-  _Reaction(Event original, {EventStatus status = EventStatus.synced})
+  _Reaction(Event original, {super.status = EventStatus.synced})
     : super(
         room: original.room,
         eventId: r'$own-reaction',
         senderId: original.room.client.userID!,
         originServerTs: DateTime.utc(2026),
-        status: status,
         type: EventTypes.Reaction,
         content: {
           'm.relates_to': {
@@ -47,6 +48,10 @@ void main() {
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await AppSettings.init(loadWebConfigFile: false);
+  });
+  setUp(() async {
+    await AppSettings.store.remove(EmojiRecents.key);
+    EmojiRecents.debugReset();
   });
   test(
     'in-flight then echo lag retains one intention; confirmed sync releases',
@@ -236,6 +241,7 @@ void main() {
         isFalse,
       );
       expect(local.removals, 1);
+      expect(EmojiRecents.usage, isEmpty);
       timeline.aggregatedEvents.clear();
       ConversationMessageActions.reconcile(event, timeline);
       expect(
@@ -309,6 +315,7 @@ void main() {
         strict: true,
       );
       expect(room.reactionsSent, 0);
+      expect(EmojiRecents.usage, isEmpty);
     },
   );
   testWidgets('different pending emoji share source capacity before SDK echo', (
@@ -357,8 +364,10 @@ void main() {
       isFalse,
     );
     expect(room.reactionsSent, 1);
+    expect(EmojiRecents.usage, isEmpty);
     room.reactionGate!.complete(r'$accepted');
     expect(await first, isTrue);
+    expect(EmojiRecents.usage, {'👍': 1});
     expect(
       await ConversationMessageActions.react(
         context,
@@ -370,7 +379,78 @@ void main() {
       isFalse,
     );
     expect(room.reactionsSent, 1);
+    expect(EmojiRecents.usage, {'👍': 1});
   });
+  testWidgets(
+    'source rejection never counts usage; an accepted retry counts once',
+    (tester) async {
+      final client = ConversationClient();
+      final room = ConversationRoom(client, '!usage:example.invalid');
+      final event = room.message(r'$usage', 'Fictional');
+      final timeline = Timeline(
+        room: room,
+        chunk: TimelineChunk(events: [event]),
+      );
+      addTearDown(timeline.cancelSubscriptions);
+      late BuildContext context;
+      await tester.pumpWidget(
+        Provider<MatrixState>.value(
+          value: ConversationMatrix(client, AppSettings.store),
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (c) {
+                  context = c;
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      room.reactionFailure = MatrixException(
+        http.Response('{"errcode":"M_FORBIDDEN","error":"fixture"}', 403),
+      );
+      expect(
+        await ConversationMessageActions.react(
+          context,
+          event,
+          timeline,
+          '👍',
+          strict: true,
+        ),
+        isFalse,
+      );
+      expect(EmojiRecents.usage, isEmpty);
+      room.reactionFailure = null;
+      expect(
+        await ConversationMessageActions.react(
+          context,
+          event,
+          timeline,
+          '👍',
+          strict: true,
+        ),
+        isTrue,
+      );
+      expect(EmojiRecents.usage, {'👍': 1});
+      final own = _Reaction(event);
+      timeline.addAggregatedEvent(own);
+      expect(
+        await ConversationMessageActions.react(
+          context,
+          event,
+          timeline,
+          '👍',
+          strict: true,
+          toggle: true,
+        ),
+        isFalse,
+      );
+      expect(own.removals, 1);
+      expect(EmojiRecents.usage, {'👍': 1});
+    },
+  );
   testWidgets(
     'unknown removal survives fresh unloaded timeline until source redaction evidence',
     (tester) async {

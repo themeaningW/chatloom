@@ -7,6 +7,7 @@ import 'package:chatloom/pages/chat/conversation_message_actions.dart';
 import 'package:chatloom/pages/chat/conversation_message_menu.dart';
 import 'package:chatloom/pages/chat/events/message.dart';
 import 'package:chatloom/personal/capabilities.dart';
+import 'package:chatloom/personal/emoji/emoji_picker.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
 import 'package:chatloom/widgets/matrix.dart';
@@ -156,6 +157,9 @@ void main() {
     haptics.clear();
     await AppSettings.doubleTapToReact.setItem(true);
     await AppSettings.doubleTapReaction.setItem('');
+    await AppSettings.reactionsFrequentlyUsed.setItem(false);
+    await AppSettings.store.remove(EmojiRecents.key);
+    EmojiRecents.debugReset();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
           if (call.method == 'HapticFeedback.vibrate') {
@@ -276,10 +280,40 @@ void main() {
     await tester.tap(_emoji('😂'));
     await tester.pumpAndSettle();
     expect(f.room.sentEmoji, ['😂']);
+    expect(EmojiRecents.usage, {'😂': 1});
     expect(_emoji('😂'), findsNothing);
     expect(f.selected, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'More opens frequent search; an accepted pick counts exactly once',
+    (tester) async {
+      await AppSettings.reactionsFrequentlyUsed.setItem(true);
+      final f = _Fixture();
+      addTearDown(f.dispose);
+      await f.mount(tester);
+      await tester.longPress(find.text('Fictional menu message'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('reaction-more')));
+      await tester.pumpAndSettle();
+      expect(find.text('Frequently used'), findsOneWidget);
+      expect(
+        tester
+            .widget<ChatLoomEmojiPicker>(find.byType(ChatLoomEmojiPicker))
+            .recordUsage,
+        isFalse,
+      );
+      expect(EmojiRecents.usage, isEmpty);
+      await tester.enterText(find.byType(TextField).last, 'pizza');
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('🍕').first);
+      await tester.pumpAndSettle();
+      expect(f.room.sentEmoji, ['🍕']);
+      expect(EmojiRecents.usage, {'🍕': 1});
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('slide to react: release over an emoji while still holding', (
     tester,
@@ -353,6 +387,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(own.removals, 1);
       expect(f.room.reactionsSent, 0);
+      expect(EmojiRecents.usage, isEmpty);
     },
   );
 
@@ -383,6 +418,7 @@ void main() {
       await _doubleTap(tester, find.text('Fictional menu message'));
       await tester.pumpAndSettle();
       expect(f.room.sentEmoji, ['❤️']);
+      expect(EmojiRecents.usage, {'❤️': 1});
       // The burst played at the finger and is gone again.
       expect(haptics, ['HapticFeedbackType.lightImpact']);
       expect(find.byType(NotionReactionBurst), findsNothing);
@@ -395,6 +431,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(own.removals, 1);
       expect(f.room.sentEmoji, ['❤️']);
+      expect(EmojiRecents.usage, {'❤️': 1});
     });
 
     testWidgets('uses the network spelling where allowed_reactions apply', (

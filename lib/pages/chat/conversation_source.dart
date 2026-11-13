@@ -93,7 +93,7 @@ abstract interface class ConversationTimelineSource {
   /// Opens a thread from its root, or null where threads are unavailable.
   void Function(String eventId)? get threadOpener;
 
-  /// Heading over the first message of a series ("via Telegram"), or null.
+  /// Source caption for an isolated search result, or null.
   String? sourceLabelFor(Event event);
 
   /// True where a series must break before or after [event] for reasons the
@@ -102,6 +102,11 @@ abstract interface class ConversationTimelineSource {
 
   /// Bridge features must be verified (not merely not refused) to be offered.
   bool get strictCapabilities;
+}
+
+/// Optional source identity for a timeline interleaving multiple networks.
+abstract interface class ConversationNetworkSource {
+  String? conversationNetworkFor(Event event);
 }
 
 /// What the shared composer ([ChatInputRow], [ReplyDisplay],

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'dart:math' as math;
 
+import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:personal_core/bridge_capabilities.dart'
@@ -38,6 +39,8 @@ class EmojiReactionChoices {
 /// used and the categories; when the network has a fixed set
 /// (`allowed_reactions`, every Telegram chat) exactly that set in its order
 /// and spelling, searchable, with no skin tones (the network has none).
+/// The optional Frequently used reaction view replaces those sections with
+/// personal usage rankings; Search still covers the network's full set.
 class ChatLoomEmojiPicker extends StatefulWidget {
   const ChatLoomEmojiPicker({
     super.key,
@@ -47,6 +50,7 @@ class ChatLoomEmojiPicker extends StatefulWidget {
     this.autofocus = false,
     this.background,
     this.controller,
+    this.recordUsage = true,
   });
 
   final ValueChanged<String> onSelected;
@@ -55,6 +59,10 @@ class ChatLoomEmojiPicker extends StatefulWidget {
   final bool autofocus;
   final Color? background;
   final TextEditingController? controller;
+
+  /// A dispatched reaction records usage after the network accepts it instead.
+  /// Composer and preference pickers record their selection immediately.
+  final bool recordUsage;
 
   @override
   State<ChatLoomEmojiPicker> createState() => _ChatLoomEmojiPickerState();
@@ -65,6 +73,8 @@ class _ChatLoomEmojiPickerState extends State<ChatLoomEmojiPicker> {
   late List<NotionEmojiSection> _sections;
   late NotionEmojiSearch _search;
   late bool _restricted;
+  late bool _frequentOnly;
+  bool _resetting = false;
   late Map<String, int> _usage;
   Map<String, String> _tones = EmojiSkinTones.all;
 
@@ -96,8 +106,54 @@ class _ChatLoomEmojiPickerState extends State<ChatLoomEmojiPicker> {
     final reactions = widget.reactions;
     final allowed = reactions?.allowed;
     _restricted = allowed != null;
+    _frequentOnly =
+        reactions != null && AppSettings.reactionsFrequentlyUsed.value;
     _usage = EmojiRecents.usage;
     final recents = EmojiRecents.emoji;
+    if (_frequentOnly) {
+      final spelling = allowed == null
+          ? null
+          : {for (final key in allowed) normalizeReactionKey(key): key};
+      final frequent = <String>[];
+      for (final glyph in EmojiRecents.frequent) {
+        final permitted = spelling == null
+            ? glyph
+            : spelling[normalizeReactionKey(glyph)];
+        if (permitted != null && !frequent.contains(permitted)) {
+          frequent.add(permitted);
+        }
+      }
+      _sections = [
+        NotionEmojiSection(
+          id: 'frequent',
+          title: 'Frequently used',
+          icon: Icons.history_rounded,
+          emoji: [
+            for (final glyph in frequent) _entry(glyph, tones: !_restricted),
+          ],
+          emptyLabel: 'Choose an emoji with Search.',
+          trailing: SizedBox(
+            height: NotionSize.touchTarget,
+            child: NotionButton.ghost(
+              key: const ValueKey('emoji-reset-usage'),
+              label: 'Reset',
+              onPressed: _resetting || !EmojiRecents.any ? null : _resetUsage,
+            ),
+          ),
+        ),
+      ];
+      _search = spelling == null
+          ? EmojiCatalog.search
+          : NotionEmojiSearch(
+              [
+                for (final glyph in spelling.values)
+                  _entry(glyph, tones: false),
+              ],
+              aliases: EmojiCatalog.aliases,
+              popular: EmojiCatalog.popular,
+            );
+      return;
+    }
     if (allowed != null) {
       // The network's spelling for every offered emoji.
       final spelling = {
@@ -171,13 +227,33 @@ class _ChatLoomEmojiPickerState extends State<ChatLoomEmojiPicker> {
   }
 
   void _selected(String glyph) {
-    EmojiRecents.add(glyph);
+    if (widget.recordUsage) EmojiRecents.add(glyph);
     widget.onSelected(glyph);
   }
 
   void _tone(String emoji, String? tone) {
     EmojiSkinTones.remember(emoji, tone);
     setState(() => _tones = EmojiSkinTones.all);
+  }
+
+  Future<void> _resetUsage() async {
+    if (_resetting) return;
+    _resetting = true;
+    setState(_build);
+    try {
+      await EmojiRecents.clear();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('Could not reset emoji usage. Try again.'),
+          ),
+        );
+      }
+    } finally {
+      _resetting = false;
+      if (mounted) setState(_build);
+    }
   }
 
   @override
@@ -189,7 +265,7 @@ class _ChatLoomEmojiPickerState extends State<ChatLoomEmojiPicker> {
     selected: widget.reactions?.own ?? const {},
     tones: _restricted ? const {} : _tones,
     onTone: _restricted ? null : _tone,
-    categoryBar: !_restricted,
+    categoryBar: !_restricted && !_frequentOnly,
     focusNode: widget.focusNode,
     autofocus: widget.autofocus,
     hint: _restricted ? 'Search reactions' : 'Search emoji',

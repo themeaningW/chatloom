@@ -44,12 +44,20 @@ class NotionEmojiSection {
     required this.title,
     required this.icon,
     required this.emoji,
+    this.trailing,
+    this.emptyLabel,
   });
 
   final String id;
   final String title;
   final IconData icon;
   final List<NotionEmoji> emoji;
+
+  /// Optional section action, such as resetting personal usage.
+  final Widget? trailing;
+
+  /// Keeps an empty section visible with a useful browse hint.
+  final String? emptyLabel;
 }
 
 /// ChatLoom's emoji picker (Telegram/Messenger grade, Notion dark v2): a
@@ -85,7 +93,7 @@ class NotionEmojiPicker extends StatefulWidget {
     this.controller,
   });
 
-  /// Shown in this order; empty sections are skipped.
+  /// Shown in this order; empty sections without a browse hint are skipped.
   final List<NotionEmojiSection> sections;
 
   /// The chosen glyph, with its skin tone.
@@ -347,7 +355,7 @@ class NotionEmojiPickerState extends State<NotionEmojiPicker> {
         notionGlassOpaque(context, notion.glass.overlayTint);
     _visible = [
       for (final section in widget.sections)
-        if (section.emoji.isNotEmpty) section,
+        if (section.emoji.isNotEmpty || section.emptyLabel != null) section,
     ];
     final search = widget.search;
     return Listener(
@@ -400,7 +408,9 @@ class NotionEmojiPickerState extends State<NotionEmojiPicker> {
     final cell = inner / columns;
     final scaler = MediaQuery.textScalerOf(context);
     final header = math.max(
-      NotionEmojiSizes.header,
+      _visible.any((section) => section.trailing != null)
+          ? NotionSize.touchTarget
+          : NotionEmojiSizes.header,
       scaler.scale(NotionType.caption.fontSize!) * 1.4 + NotionSpace.sm,
     );
     // Fixed extents: section starts are arithmetic, no keys or layouts.
@@ -408,7 +418,11 @@ class NotionEmojiPickerState extends State<NotionEmojiPicker> {
     var y = 0.0;
     for (final section in _visible) {
       offsets.add(y);
-      y += header + (section.emoji.length / columns).ceil() * cell;
+      y +=
+          header +
+          (section.emoji.isEmpty && section.emptyLabel != null
+              ? NotionSize.touchTarget * 4
+              : (section.emoji.length / columns).ceil() * cell);
     }
     _offsets = offsets;
     final searching = _searching;
@@ -424,12 +438,21 @@ class NotionEmojiPickerState extends State<NotionEmojiPicker> {
                   title: section.title,
                   height: header,
                   background: background,
+                  trailing: section.trailing,
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: side),
-                sliver: _grid(section.emoji, columns, cell),
-              ),
+              if (section.emoji.isEmpty && section.emptyLabel != null)
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: NotionSize.touchTarget * 4,
+                    child: _Empty(label: section.emptyLabel!),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: side),
+                  sliver: _grid(section.emoji, columns, cell),
+                ),
             ],
           ),
         const SliverToBoxAdapter(child: SizedBox(height: NotionSpace.xs)),
@@ -759,11 +782,13 @@ class _SectionHeader extends StatelessWidget {
     required this.title,
     required this.height,
     required this.background,
+    this.trailing,
   });
 
   final String title;
   final double height;
   final Color background;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -774,14 +799,18 @@ class _SectionHeader extends StatelessWidget {
         color: background,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: NotionSpace.sm),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.notion.typography.sectionLabel,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.notion.typography.sectionLabel,
+                ),
+              ),
+              ?trailing,
+            ],
           ),
         ),
       ),

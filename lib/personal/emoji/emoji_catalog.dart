@@ -374,6 +374,45 @@ abstract final class EmojiRecents {
     for (final e in _load()) e.emoji: e.count,
   };
 
+  /// Most used first; equally used emoji retain their latest-use order.
+  /// Presentation-selector variants share a count without losing skin tones.
+  static List<String> get frequent {
+    final counts = <String, int>{};
+    final glyphs = <String, String>{};
+    final order = <String, int>{};
+    for (final entry in _load()) {
+      final identity = NotionReactions.normalize(entry.emoji);
+      order.putIfAbsent(identity, () => order.length);
+      glyphs.putIfAbsent(identity, () => entry.emoji);
+      counts.update(
+        identity,
+        (value) => value + entry.count,
+        ifAbsent: () => entry.count,
+      );
+    }
+    final sorted = counts.keys.toList()
+      ..sort((a, b) {
+        final byCount = counts[b]!.compareTo(counts[a]!);
+        return byCount == 0 ? order[a]!.compareTo(order[b]!) : byCount;
+      });
+    return [for (final key in sorted) glyphs[key]!];
+  }
+
+  /// Clears local usage only; picker mode and remembered tones are untouched.
+  static Future<void> clear() async {
+    final previous = _load();
+    final cleared = <({String emoji, int count})>[];
+    _cache = cleared;
+    try {
+      if (!await AppSettings.store.remove(key)) {
+        throw StateError('Emoji usage could not be reset.');
+      }
+    } catch (_) {
+      if (identical(_cache, cleared)) _cache = previous;
+      rethrow;
+    }
+  }
+
   /// Whether at least one emoji was used.
   static bool get any => _load().isNotEmpty;
 

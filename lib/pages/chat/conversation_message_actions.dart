@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/personal/capabilities.dart';
+import 'package:chatloom/personal/emoji/emoji_catalog.dart';
 import 'package:chatloom/personal/encryption/undecryptable_messages.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/widgets/matrix.dart';
@@ -861,6 +862,7 @@ abstract final class ConversationMessageActions {
           ? null
           : () => manager.hideReplaced(replacing, addingKey),
     );
+    if (result == ConversationReactionResult.added) EmojiRecents.add(emoji);
     if (replacing.isNotEmpty && result != ConversationReactionResult.added) {
       manager.restoreReplaced(by: addingKey);
     }

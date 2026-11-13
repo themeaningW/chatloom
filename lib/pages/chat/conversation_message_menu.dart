@@ -510,6 +510,7 @@ class _MessageMenuState extends State<_MessageMenu>
             geometry: _geometry,
             child: ChatLoomEmojiPicker(
               reactions: widget.moreReactions,
+              recordUsage: false,
               onSelected: _pick,
             ),
           ),

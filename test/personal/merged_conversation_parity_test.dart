@@ -7,6 +7,7 @@ import 'package:chatloom/l10n/l10n.dart';
 import 'package:chatloom/pages/chat/chat.dart';
 import 'package:chatloom/pages/chat/chat_event_list.dart';
 import 'package:chatloom/pages/chat/chat_input_row.dart';
+import 'package:chatloom/pages/chat/conversation_network_change.dart';
 import 'package:chatloom/pages/chat/events/message.dart';
 import 'package:chatloom/pages/chat/input_bar.dart';
 import 'package:chatloom/pages/chat/undecryptable_chat_hint.dart';
@@ -227,8 +228,8 @@ void main() {
   testWidgets('ordinary and merged chats render the same timeline features', (
     tester,
   ) async {
-    // Tall enough that every fixture row (five in the merged chat, each
-    // with its source heading) is on screen, not only in the scroll cache.
+    // Tall enough that every fixture row and source transition is on screen,
+    // not only in the scroll cache.
     await tester.binding.setSurfaceSize(const Size(800, 1100));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final client = ConversationClient();
@@ -259,7 +260,7 @@ void main() {
     );
     _expectSharedTimeline(tester, rows: 4);
     // Ordinary rows carry no source heading.
-    expect(find.textContaining('via '), findsNothing);
+    expect(find.textContaining(RegExp(r'^via ')), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     final personal = ConversationPersonal(client);
@@ -276,8 +277,17 @@ void main() {
     // The same four rows plus the other network's message.
     _expectSharedTimeline(tester, rows: 5);
     expect(find.text('Messenger fictional message'), findsOneWidget);
-    expect(find.text('via WhatsApp'), findsWidgets);
-    expect(find.text('via Messenger'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^via ')), findsNothing);
+    expect(find.byType(ConversationNetworkChange), findsNWidgets(2));
+    expect(
+      tester
+          .widgetList<ConversationNetworkChange>(
+            find.byType(ConversationNetworkChange),
+          )
+          .map((marker) => marker.network)
+          .toSet(),
+      {'whatsapp', 'messenger'},
+    );
   });
 
   testWidgets('both chats request older history without a button', (

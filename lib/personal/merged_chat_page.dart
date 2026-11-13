@@ -213,6 +213,7 @@ class _MergedChatPageState extends State<_MergedChatView>
     with WidgetsBindingObserver
     implements
         ConversationTimelineSource,
+        ConversationNetworkSource,
         ConversationComposerHost,
         ComposerDictationSendReceiptHost,
         ConversationSourceHintHost,
@@ -1509,6 +1510,10 @@ class _MergedChatPageState extends State<_MergedChatView>
   @override
   String? sourceLabelFor(Event event) =>
       'via ${notionNetworkLabel(PersonalClient.networkOf(event.room))}';
+
+  @override
+  String? conversationNetworkFor(Event event) =>
+      PersonalClient.networkOf(event.room);
 
   @override
   bool seriesBoundary(Event event) => _boundaries[_rowKey(event)] ?? false;

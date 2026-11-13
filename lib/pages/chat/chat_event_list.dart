@@ -10,12 +10,18 @@ import 'package:chatloom/l10n/l10n.dart';
 import 'package:chatloom/pages/chat/conversation_bubble.dart';
 import 'package:chatloom/pages/chat/conversation_grouping.dart';
 import 'package:chatloom/pages/chat/conversation_motion.dart';
+import 'package:chatloom/pages/chat/conversation_network_change.dart';
+import 'package:chatloom/pages/chat/conversation_network_runs.dart';
 import 'package:chatloom/pages/chat/conversation_source.dart';
 import 'package:chatloom/pages/chat/encryption_info.dart';
 import 'package:chatloom/pages/chat/events/message.dart';
 import 'package:chatloom/pages/chat/media_album.dart';
 import 'package:chatloom/pages/chat/seen_by_row.dart';
 import 'package:chatloom/pages/chat/typing_indicators.dart';
+import 'package:chatloom/personal/bridge_notices.dart';
+import 'package:chatloom/personal/conversation_classification.dart';
+import 'package:chatloom/personal/deleted_messages.dart';
+import 'package:chatloom/personal/encryption/undecryptable_messages.dart';
 import 'package:chatloom/personal/media/media_prefetcher.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/ui/notion/notion.dart';
@@ -364,6 +370,54 @@ class _ChatEventListState extends State<ChatEventList>
     super.dispose();
   }
 
+  Map<int, String> _networkChanges(
+    List<Event> events,
+    List<MediaAlbumSlot?> albums,
+  ) {
+    if (controller is! ConversationNetworkSource) return const {};
+    final source = controller as ConversationNetworkSource;
+    final networks = Map<Room, String?>.identity();
+    return conversationNetworkChanges([
+      for (var i = 0; i < events.length; i++)
+        if (albums[i]?.lead == false || !_networkBubble(events[i]))
+          const ConversationNetworkItem(null, visible: false)
+        else
+          ConversationNetworkItem(
+            networks.putIfAbsent(events[i].room, () {
+              final raw = source.conversationNetworkFor(events[i]);
+              if (raw == null || raw.trim().isEmpty) return null;
+              final network = raw.trim().toLowerCase();
+              if (network == 'unknown') return null;
+              return canonicalNetwork(network) ?? network;
+            }),
+          ),
+    ]);
+  }
+
+  bool _networkBubble(Event event) {
+    if (!const {
+          EventTypes.Message,
+          EventTypes.Sticker,
+          EventTypes.Encrypted,
+          PollEventContent.startType,
+        }.contains(event.type) ||
+        event.messageType == EventTypes.KeyVerificationRequest) {
+      return false;
+    }
+    if (event.type == EventTypes.Encrypted &&
+        !isUndecryptable(deletedDisplayCopy(event))) {
+      return false;
+    }
+    if (event.messageType == MessageTypes.Notice) {
+      final timeline = controller.timelineFor(event);
+      final display = timeline == null
+          ? event
+          : event.getDisplayEvent(timeline);
+      if (bridgeServiceNotice(display) != null) return false;
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final events = controller.conversationEvents;
@@ -415,6 +469,7 @@ class _ChatEventListState extends State<ChatEventList>
           event.eventId == controller.readMarkerEventId ||
           _hasFooterContent(event),
     );
+    final networkChanges = _networkChanges(events, albums);
     // One palette lookup per list build instead of one per row.
     _listenPersonal();
     final roomPalette = controller.conversationPalette;
@@ -628,8 +683,11 @@ class _ChatEventListState extends State<ChatEventList>
                         ),
                       if (i == firstUnread)
                         ConversationUnreadDivider(count: unread),
+                      if (networkChanges[i] case final network?)
+                        ConversationNetworkChange(network: network),
                       Message(
                         event,
+                        key: const ValueKey('conversation-message'),
                         album: album,
                         bigEmojis: controller.bigEmojis,
                         onSwipe: () => controller.replyAction(replyTo: event),
@@ -643,7 +701,6 @@ class _ChatEventListState extends State<ChatEventList>
                         menuActions: (event) =>
                             controller.messageActions(context, event),
                         timeline: controller.timelineFor(event)!,
-                        sourceLabel: controller.sourceLabelFor(event),
                         seriesBoundary: controller.seriesBoundary,
                         strictCapabilities: controller.strictCapabilities,
                         displayReadMarker: firstUnread >= 0 && i == markerRow,

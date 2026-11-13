@@ -37,6 +37,19 @@ the existing expandable + tray. Keep this layout through phone rotation so
 held recording gestures retain their owner. Narrow desktop windows share it.
 Composer insets are 4 pixels; avoid stacking extra padding inside the field.
 
+Merged timelines show one centered network glyph only at a known chronological
+change of network. Sender, reply, date, delivery and source-room boundaries do
+not repeat it. Skip service lines and hidden album members; unknown history
+does not imply a change. Keep the logo's network name in semantics/tooltip,
+without a visible "via" caption. Search-result captions remain independent.
+
+Chats offers an optional **Reaction picker: Frequently used** view. It has one
+usage-ranked section, Search and Reset, without quick/recent/category sections.
+Search retains all reactions permitted by that chat. Reset clears usage only;
+skin tones, picker mode and configured quick reactions survive. The composer
+keeps the complete picker. Record a reaction use only after an accepted add,
+including the quick bar and double tap; never count removal, denial or failure.
+
 Settings uses grouped surfaces with inset separators, clear chevrons and a
 larger account avatar. The conversation header drops decorative dividers.
 Glass is optional settled chrome, not a requirement to blur every surface.
