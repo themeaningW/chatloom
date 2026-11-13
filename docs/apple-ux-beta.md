@@ -45,6 +45,13 @@ existing infos. The focused modules/tests pass with fatal infos enabled; the
 general merged host retains its four pre-existing infos, also confirmed
 against the preceding build's analysis.
 
+The Windows xcross release of `a6ed245` completed as **2.10.0 (3582)**.
+Bundle metadata, both features in AOT, all 14 icon PNGs, the bridge endpoint
+and retained notification/shake/report hooks were verified. The staged app
+has not been installed on the physical iPhone. Swift/Xcode compilation remains
+unverified here; the existing dSYM and CocoaPods-only Share plugin limitations
+remain. The local installer updates the existing app and preserves its data.
+
 ## Edge-aligned inbox (3581)
 
 The header, hidden search panel and filter controls use a 16-point horizontal
