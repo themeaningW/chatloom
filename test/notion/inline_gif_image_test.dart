@@ -101,11 +101,15 @@ void main() {
     media('gif');
   });
 
-  Widget app({bool visible = true, bool reduced = false}) => MaterialApp(
+  Widget app({
+    bool visible = true,
+    bool reduced = false,
+    NotionAccessibilitySettings? accessibility,
+  }) => MaterialApp(
     theme: NotionTheme.build(Brightness.dark),
     builder: (context, child) => MediaQuery(
       data: MediaQuery.of(context).copyWith(disableAnimations: reduced),
-      child: child!,
+      child: NotionAccessibilityScope(settings: accessibility, child: child!),
     ),
     home: Scaffold(
       body: TickerMode(
@@ -217,6 +221,61 @@ void main() {
     }
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('native media autoplay stays independent of reduced UI motion', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      app(
+        reduced: true,
+        accessibility: const NotionAccessibilitySettings(
+          reduceMotion: true,
+          animatedImages: true,
+        ),
+      ),
+    );
+    await loaded(tester);
+    final samples = <int>{};
+    for (var i = 0; i < 6; i++) {
+      samples.add(await pixel(tester));
+      await tester.pump(const Duration(milliseconds: 120));
+    }
+    expect(samples.length, greaterThan(1));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'disabled native autoplay can be played and paused inside the bubble',
+    (tester) async {
+      await tester.pumpWidget(
+        app(
+          reduced: true,
+          accessibility: const NotionAccessibilitySettings(
+            reduceMotion: true,
+            animatedImages: false,
+          ),
+        ),
+      );
+      await loaded(tester);
+      final still = await pixel(tester);
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(await pixel(tester), still);
+      await tester.tap(find.byType(NotionMediaPlaybackControl));
+      await tester.pump();
+      final samples = <int>{};
+      for (var i = 0; i < 6; i++) {
+        samples.add(await pixel(tester));
+        await tester.pump(const Duration(milliseconds: 120));
+      }
+      expect(samples.length, greaterThan(1));
+      await tester.tap(find.byType(NotionMediaPlaybackControl));
+      await tester.pump();
+      final paused = await pixel(tester);
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(await pixel(tester), paused);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   for (final reduced in [false, true]) {
     testWidgets(

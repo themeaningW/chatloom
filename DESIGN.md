@@ -727,9 +727,15 @@ back (the sheet closes with its own motion, the `PopScope` callback runs).
    frame after its cap (`NotionMotion.loopCap`, `liveLoopCap` for live
    states): a wait that never ends (failed media, an offline worker) must
    not draw frames forever. Failed media shows a static fallback, never a
-   spinner. Content loops (Lottie stickers, inline GIFs) play only while
-   visible, under `TickerMode` on and outside reduced motion
-   (`NotionContentLoopGate`). Never leave a
+   spinner. Lottie content follows reduced motion. Inline GIF images/videos use
+   `NotionMotion.mediaReduced` and `NotionContentLoopGate(mediaPlayback: true)`:
+   visible, foreground and tickers on, explicit autoplay enabled, and the native
+   animated-image preference permits it. On iOS 17+ this is independent of
+   interface Reduce Motion. A visible play/pause control allows an explicit
+   inline request when autoplay is paused, without changing global settings.
+   Flutter's own Image animation check is overridden only inside the gated
+   media subtree. Reduce Transparency independently forces opaque glass.
+   Never leave a
    skeleton enabled in a settled golden; use fixed pumps for loops.
 5. No timers for motion. flutter_animate's `Animate` widget, `.animate()`
    and `AnimateList` always schedule a `Future.delayed` (even with zero

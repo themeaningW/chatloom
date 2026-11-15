@@ -64,6 +64,12 @@ abstract final class MediaPlaybackDiagnostics {
     bool? route,
     bool? active,
     bool? suspended,
+    bool? appReduceMotion,
+    bool? systemReduceMotion,
+    bool? animatedImages,
+    bool? flutterDisableAnimations,
+    bool? mediaReduced,
+    bool? manualPlayback,
   }) {
     if (!(debugEnabled ?? _enabled)) return;
     final info = event.infoMap;
@@ -100,6 +106,12 @@ abstract final class MediaPlaybackDiagnostics {
       'route': ?route,
       'active': ?active,
       'suspended': ?suspended,
+      'appReduceMotion': ?appReduceMotion,
+      'systemReduceMotion': ?systemReduceMotion,
+      'animatedImages': ?animatedImages,
+      'flutterDisableAnimations': ?flutterDisableAnimations,
+      'mediaReduced': ?mediaReduced,
+      'manualPlayback': ?manualPlayback,
     };
     final encoded = jsonEncode(sample);
     if (_last == encoded) return;

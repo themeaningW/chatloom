@@ -80,3 +80,5 @@ until its native/storage acceptance is complete.
   integration behavior and current acceptance limits.
 - [Voice notes and round videos](voice-recording.md): microphone capture,
   codecs and what each bridged network receives.
+- [iOS appearance and media beta](ios-apple-design-polish.md): independent
+  accessibility preferences, inline GIF playback, previews and device checks.

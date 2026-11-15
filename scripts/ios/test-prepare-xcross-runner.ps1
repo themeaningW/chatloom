@@ -86,6 +86,13 @@ try {
         $patched -notmatch 'isEqualToString:@"isAvailable"') {
         throw 'Native shake channels or scene window were not installed'
     }
+    if ($patched -notmatch 'methodChannelWithName:@"chatloom/ios_accessibility"' -or
+        $patched -notmatch 'AXAnimatedImagesEnabled\(\)' -or
+        $patched -notmatch 'AXAnimatedImagesEnabledDidChangeNotification' -or
+        $patched -notmatch 'UIAccessibilityIsReduceTransparencyEnabled\(\)' -or
+        $patched -notmatch '\[\[ChatLoomAccessibilityBridge shared\] registerWithMessenger:messenger\]') {
+        throw 'Independent accessibility preferences or their registration are missing'
+    }
     if ($patched -notmatch 'UIApplicationStateActive' -or
         $patched -notmatch 'self.isKeyWindow' -or
         $patched -notmatch 'UISceneActivationStateForegroundActive' -or
@@ -134,10 +141,10 @@ try {
     [IO.File]::WriteAllText($runnerSource, $patched)
     $link = @((Join-Path $runnerRoot 'Runner.o'), '-o', (Join-Path $runnerRoot 'Runner'))
     & $shim @link
-    Assert-Arguments $link
+    Assert-Arguments ($link + @('-framework', 'Accessibility'))
     $linkWithFramework = $link + @('-framework', 'UserNotifications')
     & $shim @linkWithFramework
-    Assert-Arguments $linkWithFramework
+    Assert-Arguments ($linkWithFramework + @('-framework', 'Accessibility'))
     $otherRoot = Join-Path $fixtureRoot 'other'
     [IO.Directory]::CreateDirectory($otherRoot) | Out-Null
     $otherSource = Join-Path $otherRoot 'Runner.m'
@@ -146,7 +153,7 @@ try {
     & $shim @otherArguments
     Assert-Arguments $otherArguments
     if ([IO.File]::ReadAllText($otherSource) -cne 'unrelated runner remains untouched') { throw 'Unrelated source was modified' }
-    $otherLink = @((Join-Path $runnerRoot 'Runner.o'), '-o', (Join-Path $otherRoot 'Runner'))
+    $otherLink = @((Join-Path $otherRoot 'Runner.o'), '-o', (Join-Path $otherRoot 'Runner'))
     & $shim @otherLink
     Assert-Arguments $otherLink
     # The compatibility case reads a pinned cached plugin source but invokes
@@ -183,7 +190,7 @@ try {
     [IO.File]::WriteAllText($env:CHATLOOM_TEST_CLANG_ARGS, 'not invoked')
     & $shim @arguments
     if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($env:CHATLOOM_TEST_CLANG_ARGS) -cne 'not invoked') { throw 'Unsupported source did not fail before compiler invocation' }
-    Write-Output 'PASS: notification/shake channels, nonce envelope/cleanup, startup window, foreground/undo policy source, exact argv/exit forwarding, regeneration, notification-only upgrade, line endings, idempotence, unchanged linker arguments and unsupported-source rejection.'
+    Write-Output 'PASS: notification/shake channels, nonce envelope/cleanup, startup window, foreground/undo policy source, exact argv/exit forwarding, regeneration, notification-only upgrade, line endings, idempotence, accessibility channel/API registration, scoped framework linking and unsupported-source rejection.'
 } finally {
     $env:CC = $previousCc
     $env:XCROSS_APPLE_TOOL_CLANG = $previousClang

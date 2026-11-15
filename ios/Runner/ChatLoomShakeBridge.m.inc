@@ -29,6 +29,7 @@
   return self;
 }
 - (void)registerWithMessenger:(NSObject<FlutterBinaryMessenger>*)messenger {
+  [[ChatLoomAccessibilityBridge shared] registerWithMessenger:messenger];
   [self.channel setStreamHandler:nil];
   [self.availability setMethodCallHandler:nil];
   self.sink = nil;

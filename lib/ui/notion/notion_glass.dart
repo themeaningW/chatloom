@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
 
+import 'notion_accessibility.dart';
 import 'notion_display_preferences.dart';
 import 'notion_glass_reveal.dart';
 import 'notion_motion.dart';
@@ -45,8 +46,11 @@ const bool notionGlassBuildEnabled = bool.fromEnvironment(
 
 /// Whether glass may blur here. `auto` requires Impeller (the only renderer
 /// where backdrop blur is cheap and shader filters are supported) and no
-/// high-contrast / reduced-motion preference.
+/// high-contrast / reduced-transparency preference.
 bool notionGlassEnabled(BuildContext context) {
+  if (NotionAccessibilityScope.of(context)?.reduceTransparency ?? false) {
+    return false;
+  }
   if (!NotionDisplayPreferences.of(context).glassEnabled) return false;
   switch (NotionGlassScope.modeOf(context)) {
     case NotionGlassMode.on:
@@ -57,8 +61,7 @@ bool notionGlassEnabled(BuildContext context) {
       if (!notionGlassBuildEnabled || !ui.ImageFilter.isShaderFilterSupported) {
         return false;
       }
-      return !MediaQuery.highContrastOf(context) &&
-          !MediaQuery.disableAnimationsOf(context);
+      return !MediaQuery.highContrastOf(context);
   }
 }
 

@@ -142,6 +142,8 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
   bool _tickers = true;
   bool _routeCurrent = true;
   bool _reduced = false;
+  bool _manualPlayback = false;
+  bool _pausedByUser = false;
 
   bool get _sticker => InlineLoopVideo.isVideoSticker(widget.event);
 
@@ -153,10 +155,11 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
   /// The loop may play at all (not where, not when).
   bool get _autoplayAllowed =>
       _supported &&
-      !_reduced &&
+      (!_reduced || _manualPlayback) &&
+      !_pausedByUser &&
       !_failed &&
       !isOutgoingUpload(widget.event) &&
-      AppSettings.autoplayImages.value &&
+      (AppSettings.autoplayImages.value || _manualPlayback) &&
       AppSettings.showThumbnailsInTimeline.value &&
       RoundMediaPolicy.fromContent(widget.event.content).canPlay;
 
@@ -198,7 +201,7 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
     super.didChangeDependencies();
     _tickers = TickerMode.valuesOf(context).enabled;
     _routeCurrent = ModalRoute.isCurrentOf(context) ?? true;
-    _reduced = NotionMotion.reduced(context, includePowerSaving: false);
+    _reduced = NotionMotion.mediaReduced(context);
     final position = Scrollable.maybeOf(context)?.position;
     if (_scrollPosition != position) {
       _scrollPosition?.removeListener(_scheduleViewport);
@@ -216,6 +219,8 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
       _failed = false;
       _evicted = false;
       unawaited(_release());
+      _manualPlayback = false;
+      _pausedByUser = false;
     }
     _scheduleViewport();
   }
@@ -272,6 +277,12 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
       route: _routeCurrent,
       active: _appActive,
       suspended: RoundPlaybackCoordinator.shared.suspended,
+      appReduceMotion: NotionDisplayPreferences.of(context).reduceMotion,
+      systemReduceMotion: NotionAccessibilityScope.of(context)?.reduceMotion,
+      animatedImages: NotionAccessibilityScope.of(context)?.animatedImages,
+      flutterDisableAnimations: MediaQuery.disableAnimationsOf(context),
+      mediaReduced: NotionMotion.mediaReduced(context, manual: _manualPlayback),
+      manualPlayback: _manualPlayback,
     );
     final player = _player;
     if (_shouldPlay) {
@@ -429,9 +440,30 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
         PlatformInfos.supportsVideoPlayer)) {
       return;
     }
+    if (!_autoplayAllowed) {
+      _togglePlayback();
+      return;
+    }
     unawaited(
       showImageViewer(context, widget.event, timeline: widget.timeline),
     );
+  }
+
+  void _togglePlayback() {
+    if (isOutgoingUpload(widget.event) ||
+        !_supported ||
+        !RoundMediaPolicy.fromContent(widget.event.content).canPlay) {
+      return;
+    }
+    final running = _autoplayAllowed && !_pausedByUser;
+    if (running) unawaited(_pause());
+    setState(() {
+      _manualPlayback = !running;
+      _pausedByUser = running;
+      _failed = false;
+      _evicted = false;
+    });
+    _scheduleViewport();
   }
 
   Widget _poster(BuildContext context) {
@@ -513,8 +545,19 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
                           progress: uploadProgressOf(widget.event),
                         ),
                       )
-                    else if (still && !_sticker)
-                      const _LoopStillMarks(),
+                    else if ((still || _manualPlayback) && !_sticker)
+                      Align(
+                        alignment: still
+                            ? Alignment.center
+                            : Alignment.topRight,
+                        child: NotionMediaPlaybackControl(
+                          playing: !still,
+                          reason: _reduced
+                              ? 'Autoplay paused by accessibility settings'
+                              : 'Autoplay paused',
+                          onPressed: _togglePlayback,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -524,54 +567,4 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
       ),
     );
   }
-}
-
-/// A GIF that does not play by itself: a play mark and a "GIF" pill, both
-/// static.
-class _LoopStillMarks extends StatelessWidget {
-  const _LoopStillMarks();
-
-  @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      const Center(
-        child: DecoratedBox(
-          decoration: ShapeDecoration(
-            color: NotionMediaColors.scrim,
-            shape: CircleBorder(),
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(NotionSpace.sm),
-            child: Icon(
-              Icons.play_arrow_outlined,
-              color: NotionMediaColors.onScrim,
-              size: NotionSize.iconLg,
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        bottom: NotionSpace.xs,
-        left: NotionSpace.xs,
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            color: NotionMediaColors.scrim,
-            borderRadius: NotionRadius.pillAll,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: NotionSpace.xs,
-              vertical: NotionSpace.xxs,
-            ),
-            child: Text(
-              'GIF',
-              style: NotionType.caption.copyWith(
-                color: NotionMediaColors.onScrim,
-              ),
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
 }

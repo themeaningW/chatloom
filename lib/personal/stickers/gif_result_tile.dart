@@ -149,7 +149,7 @@ class _GifResultTileState extends State<GifResultTile>
     super.didChangeDependencies();
     _tickers = TickerMode.valuesOf(context).enabled;
     _routeCurrent = ModalRoute.isCurrentOf(context) ?? true;
-    _reduced = NotionMotion.reduced(context, includePowerSaving: false);
+    _reduced = NotionMotion.mediaReduced(context);
     final position = Scrollable.maybeOf(context)?.position;
     if (_scrollPosition != position) {
       _scrollPosition?.removeListener(_scheduleViewport);

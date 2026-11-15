@@ -340,6 +340,11 @@ class _ConversationMessageGesturesState
     if (root == null || !root.attached || !root.hasSize) return false;
     final result = BoxHitTestResult();
     root.hitTest(result, position: root.globalToLocal(position));
+    if (result.path.any(
+      (entry) => entry.target is RenderNotionMediaPlaybackControl,
+    )) {
+      return true;
+    }
     // These regions deliberately share their tap surface with quick reactions.
     if (result.path.any((entry) => entry.target is _MessageChromeTapRegion)) {
       return false;
@@ -638,7 +643,15 @@ class _ConversationMessageGesturesState
   }
 
   void _dragEnd(DragEndDetails details) {
-    final commit = !_blocked && _touchEnabled && _armed;
+    final commit =
+        !_blocked &&
+        _touchEnabled &&
+        NotionSwipePhysics.commits(
+          distance: _rawDistance,
+          velocity: (details.primaryVelocity ?? 0) * _direction,
+          threshold: _armed ? _disarmDistance : _armDistance,
+        );
+    if (commit && !_hapticSent) NotionHaptics.selection();
     _armed = false;
     _blocked = true;
     final derivative = _rawDistance <= _armDistance

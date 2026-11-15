@@ -9,6 +9,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'notion_accessibility.dart';
 import 'notion_activity.dart';
 import 'notion_display_preferences.dart';
 
@@ -251,10 +252,11 @@ abstract final class NotionMotion {
   /// ([NotionActivity]: another app has focus, the window is hidden). The
   /// single reduced-motion check for the whole app; depends only on the
   /// `disableAnimations` aspect of [MediaQuery] and on [NotionActivity].
-  // Content GIFs opt out of the battery-only decoration policy; accessibility,
-  // explicit Reduce Motion and foreground policy remain shared and mandatory.
+  // Interface motion follows this policy. Animated media uses mediaReduced
+  // so the native media autoplay choice remains independent.
   static bool reduced(BuildContext context, {bool includePowerSaving = true}) =>
       NotionDisplayPreferences.of(context).reduceMotion ||
+      (NotionAccessibilityScope.of(context)?.reduceMotion ?? false) ||
       (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ||
       WidgetsBinding
           .instance
@@ -263,6 +265,22 @@ abstract final class NotionMotion {
           .reduceMotion ||
       !NotionActivity.isActive(context) ||
       (includePowerSaving && NotionActivity.isPowerSaving(context));
+
+  /// Animated Images is independent from iOS Reduce Motion (UI transitions).
+  /// Older runners fall back conservatively to Flutter's system signal.
+  /// A deliberate Play may run media while decorative motion remains reduced.
+  static bool mediaReduced(BuildContext context, {bool manual = false}) {
+    if (!NotionActivity.isActive(context)) return true;
+    if (manual) return false;
+    final animated = NotionAccessibilityScope.of(context)?.animatedImages;
+    if (animated != null) return !animated;
+    return MediaQuery.disableAnimationsOf(context) ||
+        WidgetsBinding
+            .instance
+            .platformDispatcher
+            .accessibilityFeatures
+            .reduceMotion;
+  }
 
   /// Completes once the route that hosts [context], and every page route
   /// around it (a nested navigator's shell sliding in), has finished its

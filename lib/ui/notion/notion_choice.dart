@@ -21,6 +21,7 @@ Future<NotionChoice<T>?> showNotionChoiceSheet<T>(
   required List<NotionChoice<T>> options,
   required T selected,
   String keyPrefix = 'choice',
+  WidgetBuilder? footerBuilder,
 }) => showNotionSheet<NotionChoice<T>>(
   context: context,
   title: title,
@@ -44,6 +45,7 @@ Future<NotionChoice<T>?> showNotionChoiceSheet<T>(
                 : null,
             onTap: () => Navigator.of(context).pop(option),
           ),
+        if (footerBuilder != null) footerBuilder(context),
       ],
     ),
   ),

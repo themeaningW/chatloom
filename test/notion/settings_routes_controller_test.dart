@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:chatloom/config/routes.dart';
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/l10n/l10n.dart';
+import 'package:chatloom/pages/settings_style/settings_style.dart';
 import 'package:chatloom/personal/developer_options.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/personal/ui/notion_settings_adapter.dart';
@@ -111,24 +112,31 @@ Future<GoRouter> _mount(
     MultiProvider(
       providers: [
         Provider<MatrixState>.value(value: _Matrix(client, preferences)),
-        Provider<ThemeController>.value(value: ThemeController()),
         Provider<AppLock>.value(value: AppLock()),
       ],
-      child: RepaintBoundary(
-        key: _boundary,
-        child: MaterialApp.router(
-          debugShowCheckedModeBanner: false,
-          locale: const Locale('en'),
-          supportedLocales: const [Locale('en')],
-          localizationsDelegates: L10n.localizationsDelegates,
-          theme: NotionTheme.build(brightness),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: TextScaler.linear(scale)),
-            child: child!,
+      child: ThemeBuilder(
+        preferences: preferences,
+        builder: (themeContext, mode, appearance) => RepaintBoundary(
+          key: _boundary,
+          child: MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            locale: const Locale('en'),
+            supportedLocales: const [Locale('en')],
+            localizationsDelegates: L10n.localizationsDelegates,
+            theme: NotionTheme.build(brightness, appearance).copyWith(
+              extensions: [
+                ...NotionTheme.build(brightness, appearance).extensions.values,
+                ThemeController.of(themeContext).displayPreferences,
+              ],
+            ),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            routerConfig: router,
           ),
-          routerConfig: router,
         ),
       ),
     ),
@@ -353,6 +361,35 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'nearby row preview changes geometry without enlarging its text',
+    (tester) async {
+      await _mount(tester, path: '/rooms/settings/style');
+      final controller = tester.state<SettingsStyleController>(
+        find.byType(SettingsStyle),
+      );
+      final preview = find.byKey(const ValueKey('appearance_preview_inbox'));
+      final name = find.descendant(
+        of: preview,
+        matching: find.text('Anna Lis'),
+      );
+      final rowBefore = tester.getSize(preview).height;
+      final textBefore = tester.widget<Text>(name).style!.fontSize;
+      await controller.setDisplayPreferences(
+        controller.displayPreferences.copyWith(inboxRowScale: 1.5),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(preview).height, greaterThan(rowBefore));
+      expect(tester.widget<Text>(name).style!.fontSize, textBefore);
+      await Scrollable.ensureVisible(tester.element(preview), alignment: .2);
+      await tester.pumpAndSettle();
+      await _capture(tester, 'appearance-row-preview-390');
+      await controller.resetDisplayPreferences();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('reminders page lists saving, upcoming and recent reminders', (
     tester,

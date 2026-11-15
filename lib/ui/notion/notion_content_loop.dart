@@ -84,15 +84,19 @@ class NotionContentLoopGate extends StatefulWidget {
     required this.child,
     this.respectPowerSaving = true,
     this.enabled = true,
+    this.mediaPlayback = false,
+    this.manualPlayback = false,
   });
 
   final Widget child;
 
   /// The caller allows the loop at all.
   final bool enabled;
+  final bool mediaPlayback;
+  final bool manualPlayback;
 
-  /// User-requested media can play in Low Power Mode while accessibility
-  /// Reduce Motion and the explicit autoplay preference remain authoritative.
+  /// Decorative loops follow power saving by default. Media playback applies
+  /// its independent animated-image policy plus explicit autoplay/play choice.
   final bool respectPowerSaving;
 
   @override
@@ -113,10 +117,12 @@ class _NotionContentLoopGateState extends State<NotionContentLoopGate> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ancestorTickers = TickerMode.valuesOf(context).enabled;
-    _reduced = NotionMotion.reduced(
-      context,
-      includePowerSaving: widget.respectPowerSaving,
-    );
+    _reduced = widget.mediaPlayback
+        ? NotionMotion.mediaReduced(context, manual: widget.manualPlayback)
+        : NotionMotion.reduced(
+            context,
+            includePowerSaving: widget.respectPowerSaving,
+          );
     _screen = NotionContentLoop.screenSizeOf(context);
     _sync();
   }
@@ -124,10 +130,12 @@ class _NotionContentLoopGateState extends State<NotionContentLoopGate> {
   @override
   void didUpdateWidget(NotionContentLoopGate oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _reduced = NotionMotion.reduced(
-      context,
-      includePowerSaving: widget.respectPowerSaving,
-    );
+    _reduced = widget.mediaPlayback
+        ? NotionMotion.mediaReduced(context, manual: widget.manualPlayback)
+        : NotionMotion.reduced(
+            context,
+            includePowerSaving: widget.respectPowerSaving,
+          );
     _sync();
   }
 
@@ -166,6 +174,18 @@ class _NotionContentLoopGateState extends State<NotionContentLoopGate> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      TickerMode(enabled: _wanted && _visible, child: widget.child);
+  Widget build(BuildContext context) {
+    final playing = _wanted && _visible;
+    Widget child = TickerMode(enabled: playing, child: widget.child);
+    if (widget.mediaPlayback) {
+      // Flutter Image also checks disableAnimations independently of TickerMode.
+      // Override only this media subtree after applying our explicit/native media
+      // policy. The rest of the interface keeps the system Reduce Motion value.
+      child = MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: !playing),
+        child: child,
+      );
+    }
+    return child;
+  }
 }

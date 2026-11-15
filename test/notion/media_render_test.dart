@@ -322,11 +322,15 @@ void main() {
       expect(InlineLoopVideo.applies(round), isFalse);
     });
 
-    Widget app(Widget child, {bool reduced = false}) => MaterialApp(
+    Widget app(
+      Widget child, {
+      bool reduced = false,
+      NotionAccessibilitySettings? accessibility,
+    }) => MaterialApp(
       theme: NotionTheme.build(Brightness.dark),
       builder: (context, app) => MediaQuery(
         data: MediaQuery.of(context).copyWith(disableAnimations: reduced),
-        child: app!,
+        child: NotionAccessibilityScope(settings: accessibility, child: app!),
       ),
       home: Scaffold(body: Center(child: child)),
     );
@@ -424,20 +428,78 @@ void main() {
       expect(InlineLoopVideo.debugLivePlayers, 0);
     });
 
-    testWidgets('reduced motion shows the still with a GIF mark', (
+    testWidgets(
+      'system media fallback shows a still with an inline play control',
+      (tester) async {
+        await tester.pumpWidget(
+          app(
+            InlineLoopVideo(gif(r'$still'), width: 320, height: 180),
+            reduced: true,
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(platform.created, 0);
+        expect(find.byType(NotionMediaPlaybackControl), findsOneWidget);
+        expect(tester.binding.hasScheduledFrame, isFalse);
+      },
+    );
+
+    testWidgets(
+      'native autoplay permission plays bridge MP4 GIF with reduced interface motion',
+      (tester) async {
+        await tester.pumpWidget(
+          app(
+            InlineLoopVideo(gif(r'$native'), width: 320, height: 180),
+            reduced: true,
+            accessibility: const NotionAccessibilitySettings(
+              reduceMotion: true,
+              animatedImages: true,
+            ),
+          ),
+        );
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 30));
+        }
+        expect(platform.created, 1);
+        expect(platform.playing, isNotEmpty);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      },
+    );
+
+    testWidgets('manual bridge GIF plays inside the timeline and can pause', (
       tester,
     ) async {
       await tester.pumpWidget(
         app(
-          InlineLoopVideo(gif(r'$still'), width: 320, height: 180),
+          InlineLoopVideo(gif(r'$manual'), width: 320, height: 180),
           reduced: true,
+          accessibility: const NotionAccessibilitySettings(
+            animatedImages: false,
+          ),
         ),
       );
       await tester.pump();
-      await tester.pump();
       expect(platform.created, 0);
-      expect(find.text('GIF'), findsOneWidget);
-      expect(tester.binding.hasScheduledFrame, isFalse);
+      expect(
+        tester.getSize(find.byType(NotionMediaPlaybackControl)),
+        const Size.square(48),
+      );
+      await tester.tap(find.byType(NotionMediaPlaybackControl));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(platform.created, 1);
+      expect(platform.playing, isNotEmpty);
+      await tester.tap(find.byType(NotionMediaPlaybackControl));
+      await tester.pump();
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(platform.playing, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
     });
 
     testWidgets('at most a few players live at once', (tester) async {

@@ -47,17 +47,6 @@ class SettingsStyleView extends StatelessWidget {
           builder: (context, _) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // The preview builds bubbles, an inbox row and maybe a
-              // wallpaper; keep it out of the page transition. Same height
-              // before and after, so nothing below moves when it appears.
-              AfterRouteTransition(
-                placeholder: const SizedBox(height: _previewMinHeight),
-                child: _AppearancePreview(
-                  wallpaper: controller.wallpaperUrl,
-                  opacity: controller.wallpaperOpacity,
-                  blur: controller.wallpaperBlur,
-                ),
-              ),
               const NotionSectionHeader(title: 'Colour intensity'),
               _IntensitySelector(
                 appearance: appearance,
@@ -120,10 +109,6 @@ class SettingsStyleView extends StatelessWidget {
   }
 }
 
-/// The preview's height at text scale 1 on a phone, so the placeholder and
-/// the built preview take the same room.
-const double _previewMinHeight = 300;
-
 /// A sample inbox row and conversation drawn with the real presenters
 /// ([NotionInboxRow], [ConversationBubble]), so it shows exactly what the
 /// chosen colours do: avatars, unread badge, incoming and own bubbles.
@@ -131,10 +116,13 @@ class _AppearancePreview extends StatelessWidget {
   final Uri? wallpaper;
   final double opacity;
   final double blur;
+  final bool inbox;
   const _AppearancePreview({
+    super.key,
     required this.wallpaper,
     required this.opacity,
     required this.blur,
+    required this.inbox,
   });
 
   @override
@@ -146,7 +134,7 @@ class _AppearancePreview extends StatelessWidget {
     return ExcludeSemantics(
       child: IgnorePointer(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: _previewMinHeight),
+          constraints: const BoxConstraints(),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: tokens.colors.background,
@@ -181,39 +169,41 @@ class _AppearancePreview extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        NotionInboxRow(
-                          avatar: const NotionInitialAvatar(name: 'Anna Lis'),
-                          name: 'Anna Lis',
-                          preview: 'Sed diam nonumy eirmod tempor',
-                          time: '12:04',
-                          unreadCount: 2,
-                          onTap: _noop,
-                        ),
-                        Divider(color: tokens.colors.border),
-                        ConversationBubble(
-                          outgoing: false,
-                          groupPosition: ConversationGroupPosition.first,
-                          body: text('Lorem ipsum dolor sit amet'),
-                        ),
-                        ConversationBubble(
-                          outgoing: false,
-                          groupPosition: ConversationGroupPosition.last,
-                          avatar: const NotionInitialAvatar(
+                        if (inbox)
+                          NotionInboxRow(
+                            avatar: const NotionInitialAvatar(name: 'Anna Lis'),
                             name: 'Anna Lis',
-                            size: NotionBubble.avatar,
+                            preview: 'Sed diam nonumy eirmod tempor',
+                            time: '12:04',
+                            unreadCount: 2,
+                            onTap: _noop,
                           ),
-                          body: text('Consetetur sadipscing elitr?'),
-                        ),
-                        ConversationBubble(
-                          outgoing: true,
-                          groupPosition: ConversationGroupPosition.first,
-                          body: text('At vero eos et accusam'),
-                        ),
-                        ConversationBubble(
-                          outgoing: true,
-                          groupPosition: ConversationGroupPosition.last,
-                          body: text('Stet clita kasd gubergren'),
-                        ),
+                        if (!inbox) ...[
+                          ConversationBubble(
+                            outgoing: false,
+                            groupPosition: ConversationGroupPosition.first,
+                            body: text('Lorem ipsum dolor sit amet'),
+                          ),
+                          ConversationBubble(
+                            outgoing: false,
+                            groupPosition: ConversationGroupPosition.last,
+                            avatar: const NotionInitialAvatar(
+                              name: 'Anna Lis',
+                              size: NotionBubble.avatar,
+                            ),
+                            body: text('Consetetur sadipscing elitr?'),
+                          ),
+                          ConversationBubble(
+                            outgoing: true,
+                            groupPosition: ConversationGroupPosition.first,
+                            body: text('At vero eos et accusam'),
+                          ),
+                          ConversationBubble(
+                            outgoing: true,
+                            groupPosition: ConversationGroupPosition.last,
+                            body: text('Stet clita kasd gubergren'),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -733,6 +723,13 @@ class _DisplaySettings extends StatelessWidget {
           (v) => update(value.copyWith(clockFormat: v)),
         ),
         const NotionSectionHeader(title: 'Chat list'),
+        _AppearancePreview(
+          key: const ValueKey('appearance_preview_inbox'),
+          inbox: true,
+          wallpaper: controller.wallpaperUrl,
+          opacity: controller.wallpaperOpacity,
+          blur: controller.wallpaperBlur,
+        ),
         slider(
           'Row height & avatars',
           value.inboxRowScale,
@@ -778,6 +775,13 @@ class _DisplaySettings extends StatelessWidget {
           (v) => update(value.copyWith(inboxUnreadHighlight: v)),
         ),
         const NotionSectionHeader(title: 'Conversations'),
+        _AppearancePreview(
+          key: const ValueKey('appearance_preview_conversation'),
+          inbox: false,
+          wallpaper: controller.wallpaperUrl,
+          opacity: controller.wallpaperOpacity,
+          blur: controller.wallpaperBlur,
+        ),
         slider(
           'Message spacing',
           value.messageSpacing,
@@ -853,7 +857,7 @@ class _DisplaySettings extends StatelessWidget {
         const NotionSectionHeader(title: 'Effects'),
         toggle(
           'Reduce motion',
-          'Use still transitions and typing dots',
+          'Reduce interface effects; GIF autoplay is set in Chat settings',
           value.reduceMotion,
           (v) => update(value.copyWith(reduceMotion: v)),
         ),

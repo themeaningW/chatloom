@@ -231,8 +231,8 @@ abstract final class NotionBubble {
 /// Typography scale. Styles are colourless: text inherits the theme colour;
 /// use [NotionColors.textSecondary] or [NotionTypography] for muted text.
 abstract final class NotionType {
-  /// Bundled in assets/notion/fonts; set explicitly so component styles
-  /// (buttons, list tiles) never fall back to the platform font.
+  /// Bundled fallback on non-Apple hosts. Bare token styles inherit the theme
+  /// family so direct and resolved typography use the same system face.
   static const family = 'Roboto';
 
   /// Use the installed Apple system face, never redistribute Apple's font.
@@ -243,33 +243,20 @@ abstract final class NotionType {
   };
 
   /// Badges and dense timestamps.
-  static const micro = TextStyle(fontFamily: family, fontSize: 12, height: 1.3);
+  static const micro = TextStyle(fontSize: 12, height: 1.3);
 
   /// Metadata, helper text, section labels.
-  static const caption = TextStyle(
-    fontFamily: family,
-    fontSize: 13,
-    height: 1.35,
-  );
+  static const caption = TextStyle(fontSize: 13, height: 1.35);
 
   /// Row subtitles and secondary lines.
-  static const footnote = TextStyle(
-    fontFamily: family,
-    fontSize: 15,
-    height: 1.35,
-  );
+  static const footnote = TextStyle(fontSize: 15, height: 1.35);
 
   /// Dense body: property labels, menus, dialogs.
-  static const callout = TextStyle(
-    fontFamily: family,
-    fontSize: 16,
-    height: 1.35,
-  );
+  static const callout = TextStyle(fontSize: 16, height: 1.35);
 
   /// Default reading size: row titles, messages.
-  static const body = TextStyle(fontFamily: family, fontSize: 17, height: 1.4);
+  static const body = TextStyle(fontSize: 17, height: 1.4);
   static const bodyStrong = TextStyle(
-    fontFamily: family,
     fontSize: 17,
     fontWeight: FontWeight.w600,
     height: 1.4,
@@ -277,7 +264,6 @@ abstract final class NotionType {
 
   /// Header bars and dialog titles.
   static const headline = TextStyle(
-    fontFamily: family,
     fontSize: 17,
     fontWeight: FontWeight.w600,
     height: 1.3,
@@ -285,7 +271,6 @@ abstract final class NotionType {
 
   /// Section headings inside a page.
   static const heading = TextStyle(
-    fontFamily: family,
     fontSize: 20,
     fontWeight: FontWeight.w600,
     height: 1.3,
@@ -293,7 +278,6 @@ abstract final class NotionType {
 
   /// Page title (one per screen).
   static const title = TextStyle(
-    fontFamily: family,
     fontSize: 34,
     fontWeight: FontWeight.w700,
     height: 1.15,

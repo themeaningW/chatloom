@@ -30,6 +30,7 @@ class NotionInboxPage extends StatelessWidget {
   final List<Object?>? rowOrder;
   final List<NotionPinnedShortcut> pins;
   final VoidCallback onSettings;
+  final VoidCallback? onAppearance;
 
   /// Opens the full-screen search, the one place to find and start chats.
   final VoidCallback onSearch;
@@ -76,6 +77,7 @@ class NotionInboxPage extends StatelessWidget {
     this.rowOrder,
     required this.pins,
     required this.onSettings,
+    this.onAppearance,
     required this.onSearch,
     required this.onNetworkSelected,
     required this.networks,
@@ -140,15 +142,10 @@ class NotionInboxPage extends StatelessWidget {
         // The first screenful of pins and rows rises in once per page; rows
         // built later by scrolling or filtering appear as they are.
         body: SafeArea(
-          top: false,
+          top: true,
           bottom: false,
           child: Column(
             children: [
-              _InboxHeader(
-                onSettings: onSettings,
-                onSearch: unavailable ? null : onSearch,
-                status: headerStatus,
-              ),
               Expanded(
                 child: NotionEntranceScope(
                   // A chat that moves (new message) glides to its place while the
@@ -169,7 +166,7 @@ class NotionInboxPage extends StatelessWidget {
                     background: Theme.of(context).scaffoldBackgroundColor,
                     child: CustomScrollView(
                       controller: scrollController,
-                      center: const ValueKey('inbox_network_start'),
+                      center: const ValueKey('inbox_header_start'),
                       slivers: [
                         SliverPadding(
                           padding: const EdgeInsets.fromLTRB(
@@ -182,6 +179,17 @@ class NotionInboxPage extends StatelessWidget {
                             child: _InboxSearchButton(
                               onPressed: unavailable ? null : onSearch,
                             ),
+                          ),
+                        ),
+                        // The title shares the scroll surface. Pulling down still
+                        // reveals search above the initial zero position; scrolling
+                        // older chats releases a full toolbar row of reading space.
+                        SliverToBoxAdapter(
+                          key: const ValueKey('inbox_header_start'),
+                          child: _InboxHeader(
+                            onSettings: onSettings,
+                            onSearch: unavailable ? null : onSearch,
+                            status: headerStatus,
                           ),
                         ),
                         SliverPadding(
@@ -209,12 +217,35 @@ class NotionInboxPage extends StatelessWidget {
                                     label: 'Sort chats',
                                     icon: Icons.sort,
                                     onPressed: () async {
+                                      var appearanceRequested = false;
                                       final choice =
                                           await showNotionChoiceSheet<
                                             InboxSort
                                           >(
                                             context,
                                             title: 'Sort chats',
+                                            footerBuilder: onAppearance == null
+                                                ? null
+                                                : (
+                                                    sheetContext,
+                                                  ) => NotionGlassMenuRow(
+                                                    key: const ValueKey(
+                                                      'inbox_appearance',
+                                                    ),
+                                                    leading: const Icon(
+                                                      Icons.tune,
+                                                    ),
+                                                    title: 'Appearance',
+                                                    subtitle:
+                                                        'Row height, avatars and text',
+                                                    onTap: () {
+                                                      appearanceRequested =
+                                                          true;
+                                                      Navigator.of(
+                                                        sheetContext,
+                                                      ).pop();
+                                                    },
+                                                  ),
                                             selected: sort,
                                             options: const [
                                               NotionChoice(
@@ -237,6 +268,10 @@ class NotionInboxPage extends StatelessWidget {
                                               ),
                                             ],
                                           );
+                                      if (appearanceRequested) {
+                                        onAppearance?.call();
+                                        return;
+                                      }
                                       if (choice != null &&
                                           choice.value != sort) {
                                         onSortSelected?.call(choice.value);
@@ -436,7 +471,7 @@ class _InboxHeader extends StatelessWidget {
     child: Padding(
       padding: EdgeInsets.fromLTRB(
         NotionSpace.md,
-        MediaQuery.paddingOf(context).top + NotionSpace.xs,
+        NotionSpace.xs,
         NotionSpace.md,
         NotionSpace.xs,
       ),

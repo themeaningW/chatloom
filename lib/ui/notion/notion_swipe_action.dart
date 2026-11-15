@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'notion_motion.dart';
+import 'notion_swipe_physics.dart';
 import 'notion_tokens.dart';
 
 /// One side of a [NotionSwipeAction]: what a swipe in that direction does.
@@ -89,9 +90,12 @@ class _NotionSwipeActionState extends State<NotionSwipeAction>
   double _width = 0;
   bool _armed = false;
 
-  /// A dismissing swipe is running (fly off, collapse, wait, maybe return):
-  /// new drags are ignored until it is over.
+  /// The visible fly-off can be caught; a committed collapse cannot be
+  /// triggered again while waiting for the list to remove the row.
   bool _dismissing = false;
+  bool _committed = false;
+  int _dismissGeneration = 0;
+  double _rawOffset = 0;
 
   /// How long a collapsed row waits for its list to drop it before it comes
   /// back (the action was refused or did not remove it).
@@ -132,7 +136,7 @@ class _NotionSwipeActionState extends State<NotionSwipeAction>
   }
 
   bool _pointerAllowed(PointerDownEvent event) {
-    if (_dismissing) return false;
+    if (_committed || _extent.value < 1) return false;
     if (widget.startToEnd == null && widget.endToStart == null) return false;
     final media = context.getInheritedWidgetOfExactType<MediaQuery>()?.data;
     if (media == null) return true;
@@ -145,23 +149,32 @@ class _NotionSwipeActionState extends State<NotionSwipeAction>
   }
 
   void _start(DragStartDetails details) {
+    _dismissGeneration++;
+    _dismissing = false;
     _spring?.stop();
+    _rawOffset = NotionSwipePhysics.unresist(
+      _offset.value,
+      _width * .75,
+      _width,
+    );
     _armed = false;
-    _side = null;
+    _side = _sideFor(_offset.value);
   }
 
   void _update(DragUpdateDetails details) {
-    final next = _offset.value + details.delta.dx;
+    final next = _rawOffset + details.delta.dx;
+    _rawOffset = next;
     final side = _sideFor(next);
     // Only directions with an action move the row.
     if (side == null) {
+      _rawOffset = 0;
       _offset.value = 0;
       _setArmed(false);
       return;
     }
     _side = side;
     final limit = _width * 0.75;
-    _offset.value = next.clamp(-limit, limit);
+    _offset.value = NotionSwipePhysics.resist(next, limit, _width);
     final arm = _width * widget.armFraction;
     // A little hysteresis so the arm point does not flicker.
     if (_offset.value.abs() >= arm) {
@@ -178,8 +191,16 @@ class _NotionSwipeActionState extends State<NotionSwipeAction>
   }
 
   void _end(DragEndDetails details) {
-    final commit = _armed ? _side : null;
     final velocity = details.primaryVelocity ?? 0;
+    final commit =
+        NotionSwipePhysics.commits(
+          distance: _offset.value,
+          velocity: velocity,
+          threshold: _width * widget.armFraction * (_armed ? .85 : 1),
+        )
+        ? _side
+        : null;
+    if (commit != null && !_armed) NotionHaptics.selection();
     _armed = false;
     if (commit != null &&
         commit.dismisses &&
@@ -197,59 +218,65 @@ class _NotionSwipeActionState extends State<NotionSwipeAction>
   /// Controller timelines only (no timers); a disposed controller never
   /// completes its future, so nothing runs after the row left the tree.
   Future<void> _dismiss(NotionSwipeActionSide side, double velocity) async {
+    final generation = ++_dismissGeneration;
     _dismissing = true;
-    // Far enough that no part of the row stays in the list's side padding.
+    _committed = false;
     final travel = math.max(_width, MediaQuery.sizeOf(context).width);
     final target = _offset.value.sign * travel;
     final spring = _springController..value = _offset.value;
-    // The slot starts closing as soon as the row has left it; the spring's
-    // invisible tail off screen is not waited for.
     final gone = Completer<void>();
     void watch() {
       if (_offset.value.abs() >= _width && !gone.isCompleted) gone.complete();
     }
 
+    bool current() => mounted && generation == _dismissGeneration;
     _offset.addListener(watch);
-    unawaited(
-      spring
-          .animateWith(
-            NotionMotion.springTo(
-              NotionMotion.snappy,
-              _offset.value,
-              target,
-              velocity: velocity.clamp(-3000.0, 3000.0),
-            ),
-          )
-          .then((_) {
-            if (!gone.isCompleted) gone.complete();
-          }),
-    );
-    await gone.future;
-    if (!mounted) return;
-    _offset.removeListener(watch);
-    final collapse = _collapseController;
-    await collapse.animateBack(0, curve: Curves.linear);
-    if (!mounted) return;
-    side.onCommit();
-    // The list normally drops the row within a frame or two. The wait is a
-    // controller timeline (it draws nothing), never a timer.
-    final hold = _hold ??= AnimationController(
-      vsync: this,
-      duration: _dismissHold,
-    );
-    await hold.forward(from: 0);
-    if (!mounted) return;
-    if (NotionMotion.reduced(context)) {
-      _spring?.stop();
-      _offset.value = 0;
-      collapse.value = 1;
-      _dismissing = false;
-      return;
+    try {
+      await Future.any<void>([
+        gone.future,
+        spring
+            .animateWith(
+              NotionMotion.springTo(
+                NotionMotion.snappy,
+                _offset.value,
+                target,
+                velocity: velocity.clamp(-3000.0, 3000.0),
+              ),
+            )
+            .orCancel,
+      ]);
+      if (!mounted || generation != _dismissGeneration) return;
+      // Grabbing the visible fly-off cancels it. Once its slot starts closing,
+      // the action has committed and touch cannot start a duplicate request.
+      _committed = true;
+      final collapse = _collapseController;
+      await collapse.animateBack(0, curve: Curves.linear).orCancel;
+      if (!mounted || generation != _dismissGeneration) return;
+      side.onCommit();
+      final hold = _hold ??= AnimationController(
+        vsync: this,
+        duration: _dismissHold,
+      );
+      await hold.forward(from: 0).orCancel;
+      if (!mounted || generation != _dismissGeneration) return;
+      if (NotionMotion.reduced(context)) {
+        _spring?.stop();
+        _offset.value = 0;
+        collapse.value = 1;
+        return;
+      }
+      await collapse.forward().orCancel;
+      if (!mounted || generation != _dismissGeneration) return;
+      _settle(0);
+    } on TickerCanceled {
+      // A new drag caught the spring, or the row left the tree.
+    } finally {
+      if (mounted) _offset.removeListener(watch);
+      if (current()) {
+        _dismissing = false;
+        _committed = false;
+      }
     }
-    await collapse.forward();
-    if (!mounted) return;
-    _settle(0);
-    _dismissing = false;
   }
 
   void _cancel() {

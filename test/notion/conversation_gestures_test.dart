@@ -75,8 +75,9 @@ void main() {
     haptics.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-          if (call.method == 'HapticFeedback.vibrate')
+          if (call.method == 'HapticFeedback.vibrate') {
             haptics.add(call.arguments);
+          }
           return null;
         });
   });
@@ -84,6 +85,30 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, null);
   });
+
+  testWidgets(
+    'inline GIF play takes the first tap immediately, without opening media or reacting',
+    (tester) async {
+      var plays = 0, likes = 0;
+      await _mount(
+        tester,
+        onLike: () async {
+          likes++;
+          return true;
+        },
+        child: Center(
+          child: NotionMediaPlaybackControl(
+            playing: false,
+            onPressed: () => plays++,
+          ),
+        ),
+      );
+      await tester.tap(find.byType(NotionMediaPlaybackControl));
+      expect(plays, 1);
+      expect(likes, 0);
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('reply arms at 64 and commits only once on release', (
     tester,

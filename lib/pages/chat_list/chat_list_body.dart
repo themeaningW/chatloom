@@ -181,6 +181,7 @@ class _ChatListViewBodyState extends State<ChatListViewBody> {
           status: InboxHealthStatus(key: ValueKey(client), client: client),
           headerStatus: ConnectionStatusLine(client: client),
           onSettings: () => context.go('/rooms/settings'),
+          onAppearance: () => context.go('/rooms/settings/style'),
           // Search is also where new chats start (no separate compose button).
           onSearch: controller.openSearch,
           networks: controller.availableNetworks,

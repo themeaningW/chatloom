@@ -217,7 +217,7 @@ void main() {
       await close(tester);
     });
     testWidgets(
-      '$label GIF plays in Low Power Mode but respects Reduce Motion',
+      '$label GIF plays in Low Power Mode and with reduced interface motion',
       (tester) async {
         RoundPlaybackCoordinator.shared.debugReset();
         await tester.pumpWidget(app(tile(timeline), powerSaving: true));
@@ -228,7 +228,7 @@ void main() {
           app(tile(timeline), powerSaving: true, reduced: true),
         );
         await settle(tester);
-        expect(players.playing, isEmpty);
+        expect(players.playing, hasLength(1));
         await close(tester);
       },
     );

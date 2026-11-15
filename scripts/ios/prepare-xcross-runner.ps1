@@ -51,6 +51,12 @@ if (-not (Test-Path -LiteralPath $shakeSourcePath -PathType Leaf) -or
     throw 'Expected the unlinked native shake bridge source beside the iOS runner'
 }
 $shakeSource = [IO.File]::ReadAllText($shakeSourcePath)
+$accessibilitySourcePath = Join-Path $PSScriptRoot '../../ios/Runner/ChatLoomAccessibilityBridge.m.inc'
+if (-not (Test-Path -LiteralPath $accessibilitySourcePath -PathType Leaf) -or
+    ((Get-Item -LiteralPath $accessibilitySourcePath).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw 'Expected the unlinked iOS accessibility bridge source'
+}
+$shakeSource = [IO.File]::ReadAllText($accessibilitySourcePath) + "`n" + $shakeSource
 $source = @'
 using System;
 using System.Diagnostics;
@@ -186,12 +192,17 @@ internal static class ChatLoomClang {
     private static int Main(string[] arguments) {
         try {
             bool compilesRunner = false;
+            bool runnerObject = false;
+            bool compileOnly = false;
             for (int i = 0; i < arguments.Length; i++) {
                 compilesRunner |= SamePath(arguments[i], RunnerSource);
+                runnerObject |= SamePath(arguments[i], Path.ChangeExtension(RunnerSource, ".o"));
+                compileOnly |= arguments[i] == "-c";
             }
             if (compilesRunner) PrepareRunner();
             StringBuilder forwarded = new StringBuilder();
             foreach (string argument in arguments) forwarded.Append(Quote(argument)).Append(' ');
+            if (!compileOnly && (compilesRunner || runnerObject)) forwarded.Append(" -framework Accessibility ");
             if (NeedsPinnedPluginCompatibility(arguments)) forwarded.Append("-Wno-error=incompatible-pointer-types");
             ProcessStartInfo start = new ProcessStartInfo(RealClang, forwarded.ToString());
             start.UseShellExecute = false;
@@ -229,4 +240,4 @@ $env:CC = $helperPath
 if ($env:XCROSS_APPLE_TOOL_CLANG -eq $helperPath) {
     $env:XCROSS_APPLE_TOOL_CLANG = $realClang
 }
-Write-Output 'Prepared xcross notification and shake runner hooks for this PowerShell session.'
+Write-Output 'Prepared xcross notification, shake and accessibility runner hooks for this PowerShell session.'

@@ -417,6 +417,8 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
 
   /// A frame of the current bytes is on screen.
   bool _shown = false;
+  bool _manualAnimation = false;
+  bool _animationPaused = false;
 
   /// The decode size changed after a frame was shown ([MxcImage.maxDecodeSide]):
   /// the new decode swaps in place, without the placeholder fade.
@@ -876,6 +878,8 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
   }
 
   void _resetImage() {
+    _manualAnimation = false;
+    _animationPaused = false;
     _uriCancellation?.cancel();
     _uriCancellation = null;
     final capped = _capped;
@@ -1233,6 +1237,21 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
             animatedBytes: true,
             tickers: TickerMode.valuesOf(context).enabled,
             reduced: NotionMotion.reduced(context, includePowerSaving: false),
+            appReduceMotion: NotionDisplayPreferences.of(context).reduceMotion,
+            systemReduceMotion: NotionAccessibilityScope.of(
+              context,
+            )?.reduceMotion,
+            animatedImages: NotionAccessibilityScope.of(
+              context,
+            )?.animatedImages,
+            flutterDisableAnimations: MediaQuery.disableAnimationsOf(
+              this.context,
+            ),
+            mediaReduced: NotionMotion.mediaReduced(
+              context,
+              manual: _manualAnimation,
+            ),
+            manualPlayback: _manualAnimation,
           );
         }
       }
@@ -1276,12 +1295,44 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
     if (loops) {
       // Animated stickers and GIF images loop only while on screen
       // (DESIGN.md motion rule 4); timeline and grid media also follow the
-      // "autoplay" setting, the viewer (originals) always plays.
+      // explicit autoplay policy; a play request stays inside this surface.
       imageChild = NotionContentLoopGate(
-        enabled: !widget.isThumbnail || AppSettings.autoplayImages.value,
+        enabled:
+            !_animationPaused &&
+            (_manualAnimation || AppSettings.autoplayImages.value),
+        mediaPlayback: lottie == null,
+        manualPlayback: lottie == null && _manualAnimation,
         respectPowerSaving: false,
         child: imageChild,
       );
+      final running =
+          !_animationPaused &&
+          (_manualAnimation ||
+              (AppSettings.autoplayImages.value &&
+                  !NotionMotion.mediaReduced(context)));
+      if (lottie == null && (!running || _manualAnimation)) {
+        imageChild = Stack(
+          alignment: Alignment.center,
+          children: [
+            imageChild,
+            Positioned.fill(
+              child: Align(
+                alignment: running ? Alignment.topRight : Alignment.center,
+                child: NotionMediaPlaybackControl(
+                  playing: running,
+                  reason: NotionMotion.mediaReduced(context)
+                      ? 'Autoplay paused by accessibility settings'
+                      : 'Autoplay paused',
+                  onPressed: () => setState(() {
+                    _manualAnimation = !running;
+                    _animationPaused = running;
+                  }),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
     }
 
     final clipped =

@@ -35,6 +35,7 @@ void main() {
     bool split = false,
     TextDirection direction = TextDirection.ltr,
     ValueChanged<EdgeInsets>? onSidePadding,
+    VoidCallback? onAppearance,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = size;
@@ -83,6 +84,7 @@ void main() {
             pins: const [],
             networks: const ['messenger', 'instagram', 'whatsapp'],
             onSettings: () {},
+            onAppearance: onAppearance,
             onSearch: () {},
             onNetworkSelected: (_) {},
             onSortSelected: (_) {},
@@ -225,6 +227,50 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'title scrolls away while search stays reachable, pull search still works',
+    (tester) async {
+      final scroll = await mount(tester, size: const Size(430, 932));
+      expect(find.text('Chats').hitTestable(), findsOneWidget);
+      scroll.jumpTo(140);
+      await tester.pumpAndSettle();
+      expect(find.text('Chats').hitTestable(), findsNothing);
+      expect(
+        find.byKey(const ValueKey('inbox_search_fab')).hitTestable(),
+        findsOneWidget,
+      );
+      scroll.jumpTo(0);
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 160));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('notion_dock_search')).hitTestable(),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'sort menu offers Appearance without changing the selected sort',
+    (tester) async {
+      var opened = 0;
+      await mount(
+        tester,
+        size: const Size(320, 700),
+        onAppearance: () => opened++,
+      );
+      await tester.tap(find.byKey(const ValueKey('inbox_sort')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('inbox_appearance')));
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+      expect(find.text('Sort chats').hitTestable(), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('revealed search shares the header gutter', (tester) async {
     await mount(tester, size: const Size(430, 932));

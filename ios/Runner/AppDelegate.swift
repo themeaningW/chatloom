@@ -1,3 +1,4 @@
+import Accessibility
 import Flutter
 import UIKit
 import UserNotifications
@@ -20,6 +21,51 @@ import UserNotifications
     ChatLoomShakeBridge.shared.register(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
+    ChatLoomAccessibilityBridge.shared.register(messenger: engineBridge.applicationRegistrar.messenger())
+  }
+}
+
+/// Independent system preferences, refreshed live and on returning to the app.
+@MainActor final class ChatLoomAccessibilityBridge: NSObject {
+  static let shared = ChatLoomAccessibilityBridge()
+  private var channel: FlutterMethodChannel?
+  private override init() {
+    super.init()
+    for name in [UIAccessibility.reduceMotionStatusDidChangeNotification,
+                 UIAccessibility.reduceTransparencyStatusDidChangeNotification,
+                 UIApplication.didBecomeActiveNotification] {
+      NotificationCenter.default.addObserver(self, selector: #selector(changed), name: name, object: nil)
+    }
+    if #available(iOS 18.0, *) {
+      NotificationCenter.default.addObserver(self, selector: #selector(changed),
+        name: AccessibilitySettings.animatedImagesEnabledDidChangeNotification, object: nil)
+    } else if #available(iOS 17.0, *) {
+      NotificationCenter.default.addObserver(self, selector: #selector(changed),
+        name: .AXAnimatedImagesEnabledDidChange, object: nil)
+    }
+  }
+  private func snapshot() -> [String: Any] {
+    var animated: Any = NSNull()
+    if #available(iOS 18.0, *) {
+      animated = AccessibilitySettings.animatedImagesEnabled
+    } else if #available(iOS 17.0, *) {
+      animated = AXAnimatedImagesEnabled()
+    }
+    return ["reduceMotion": UIAccessibility.isReduceMotionEnabled,
+            "reduceTransparency": UIAccessibility.isReduceTransparencyEnabled,
+            "animatedImages": animated]
+  }
+  func register(messenger: FlutterBinaryMessenger) {
+    channel?.setMethodCallHandler(nil)
+    let channel = FlutterMethodChannel(name: "chatloom/ios_accessibility", binaryMessenger: messenger)
+    self.channel = channel
+    channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "snapshot" { result(self?.snapshot()) }
+      else { result(FlutterMethodNotImplemented) }
+    }
+  }
+  @objc private func changed() {
+    channel?.invokeMethod("settingsChanged", arguments: snapshot())
   }
 }
 
