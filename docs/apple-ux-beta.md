@@ -46,6 +46,15 @@ focused source/test paths are clean with fatal infos enabled. The standalone
 presentation harness still lacks `docs/notion-ui/SOURCE-SNAPSHOT.json`; the
 captures above come from production widget tests instead.
 
+The Windows xcross release of `8fb7e9a` completed as **2.10.0 (3583)**.
+Bundle metadata, both UI features in AOT, all 14 icon resources, the bridge
+endpoint, notification/shake hooks and the native AVFoundation video-player
+plugin in the generated library were verified. The package has not been
+installed on the physical iPhone; native GIF decoding and live provider playback
+remain pending. Swift/Xcode compilation remains unverified here, and the
+existing dSYM/CocoaPods-only Share plugin limitations remain. Use the local
+installer to update the existing app without removing its data.
+
 ## Network changes and frequently used reactions (3582)
 
 Merged conversations replace repeated visible **via Messenger/WhatsApp**
