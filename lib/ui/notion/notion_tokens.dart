@@ -115,6 +115,18 @@ abstract final class NotionShapes {
   );
 }
 
+/// Inbox readability relative to the original compact conversation rows.
+abstract final class NotionInboxSize {
+  static const magnification = 1.5;
+  static const unreadDot = 8.0;
+}
+
+abstract final class NotionComposerPanelSize {
+  static const expandedScreenFraction = .92;
+  static const compactHeaderThreshold = 192.0;
+  static const expandedThreeColumnWidth = 300.0;
+}
+
 /// Fixed component and icon dimensions.
 abstract final class NotionSize {
   static const double touchTarget = 48;

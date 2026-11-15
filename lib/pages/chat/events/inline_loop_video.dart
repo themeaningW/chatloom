@@ -183,6 +183,15 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
       pause: _pause,
       stop: _release,
     );
+    RoundPlaybackCoordinator.shared.suspension.addListener(_resumeLoops);
+  }
+
+  void _resumeLoops() {
+    if (!RoundPlaybackCoordinator.shared.suspended) {
+      _failed = false;
+      _evicted = false;
+    }
+    _scheduleViewport();
   }
 
   @override
@@ -190,7 +199,7 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
     super.didChangeDependencies();
     _tickers = TickerMode.valuesOf(context).enabled;
     _routeCurrent = ModalRoute.isCurrentOf(context) ?? true;
-    _reduced = NotionMotion.reduced(context);
+    _reduced = NotionMotion.reduced(context, includePowerSaving: false);
     final position = Scrollable.maybeOf(context)?.position;
     if (_scrollPosition != position) {
       _scrollPosition?.removeListener(_scheduleViewport);
@@ -215,7 +224,8 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _sync();
+      _failed = false;
+      _scheduleViewport();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       unawaited(_release());
@@ -235,13 +245,17 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
       // The shared content-loop rule (DESIGN.md motion rule 4).
       final visible = NotionContentLoop.isVisible(
         box,
-        MediaQuery.sizeOf(context),
+        NotionContentLoop.screenSizeOf(context),
         fraction: InlineLoopVideo.visibleFraction,
       );
-      if (!visible) _evicted = false;
+      if (!visible) {
+        _evicted = false;
+        if (_visible) _failed = false;
+      }
       _visible = visible;
       _sync();
     });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Starts, resumes, pauses or releases the player to match [_shouldPlay].
@@ -316,7 +330,7 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
         return;
       }
       _player = player;
-      await player.initialize();
+      await player.initialize().timeout(NotionContentLoop.initializeTimeout);
       await player.setVolume(0);
       await player.setLooping(true);
       if (generation != _generation || !mounted) return;
@@ -375,6 +389,7 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
   @override
   void dispose() {
     _disposed = true;
+    RoundPlaybackCoordinator.shared.suspension.removeListener(_resumeLoops);
     WidgetsBinding.instance.removeObserver(this);
     _scrollPosition?.removeListener(_scheduleViewport);
     _handle.dispose();

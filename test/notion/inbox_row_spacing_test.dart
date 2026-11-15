@@ -81,8 +81,8 @@ void main() {
           final title = tester.getRect(find.text('Fictional contact'));
           final time = tester.getRect(find.text('16:36'));
           final ltr = direction == TextDirection.ltr;
-          expect(ltr ? avatar.left : width - avatar.right, 16);
-          expect(avatar.width, NotionSize.avatarLg * density);
+          expect(ltr ? avatar.left : width - avatar.right, 32);
+          expect(avatar.width, NotionSize.avatarLg * density * 1.5);
           expect(ltr ? width - time.right : time.left, 16);
           expect(
             ltr ? title.left - row.left : row.right - title.right,
@@ -163,5 +163,50 @@ void main() {
         }
       });
     }
+  }
+
+  for (final unread in [false, true]) {
+    testWidgets('leading unread state is readable and aligned: $unread', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          display: const NotionDisplayPreferences(),
+          row: NotionInboxRow(
+            avatar: const SizedBox.expand(key: ValueKey('avatar')),
+            name: 'Ada',
+            preview: 'See you tomorrow',
+            unread: unread,
+            onTap: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final name = tester.widget<Text>(find.text('Ada'));
+      final preview = tester.widget<Text>(find.text('See you tomorrow'));
+      expect(
+        name.style!.fontWeight,
+        unread ? FontWeight.w700 : FontWeight.w400,
+      );
+      expect(
+        preview.style!.fontWeight,
+        unread ? FontWeight.w600 : FontWeight.w400,
+      );
+      expect(
+        name.style!.fontSize,
+        closeTo(NotionType.headline.fontSize! * .875 * 1.5, .01),
+      );
+      final avatar = tester.getRect(find.byKey(const ValueKey('avatar')));
+      expect(avatar.width, 63);
+      final dot = find.byKey(const ValueKey('notion_inbox_unread_dot'));
+      expect(dot, unread ? findsOneWidget : findsNothing);
+      if (unread) {
+        expect(tester.getRect(dot).right, lessThan(avatar.left));
+        expect(tester.getRect(dot).center.dy, closeTo(avatar.center.dy, .01));
+        expect(preview.style!.color, name.style!.color);
+      }
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   }
 }

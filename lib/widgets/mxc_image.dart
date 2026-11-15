@@ -1241,6 +1241,7 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
       // "autoplay" setting, the viewer (originals) always plays.
       imageChild = NotionContentLoopGate(
         enabled: !widget.isThumbnail || AppSettings.autoplayImages.value,
+        respectPowerSaving: false,
         child: imageChild,
       );
     }

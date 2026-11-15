@@ -11,7 +11,6 @@ import 'package:chatloom/utils/client_download_content_extension.dart';
 import 'package:chatloom/utils/platform_infos.dart';
 import 'package:chatloom/widgets/mxc_image.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
 import 'package:path_provider/path_provider.dart';
@@ -116,7 +115,16 @@ class _GifResultTileState extends State<GifResultTile>
       pause: _pause,
       stop: _release,
     );
+    RoundPlaybackCoordinator.shared.suspension.addListener(_resumeLoops);
     _loadThumbnail();
+  }
+
+  void _resumeLoops() {
+    if (!RoundPlaybackCoordinator.shared.suspended) {
+      _failed = false;
+      _evicted = false;
+    }
+    _scheduleViewport();
   }
 
   void _loadThumbnail() {
@@ -141,7 +149,7 @@ class _GifResultTileState extends State<GifResultTile>
     super.didChangeDependencies();
     _tickers = TickerMode.valuesOf(context).enabled;
     _routeCurrent = ModalRoute.isCurrentOf(context) ?? true;
-    _reduced = NotionMotion.reduced(context);
+    _reduced = NotionMotion.reduced(context, includePowerSaving: false);
     final position = Scrollable.maybeOf(context)?.position;
     if (_scrollPosition != position) {
       _scrollPosition?.removeListener(_scheduleViewport);
@@ -167,7 +175,8 @@ class _GifResultTileState extends State<GifResultTile>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _sync();
+      _failed = false;
+      _scheduleViewport();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       unawaited(_release());
@@ -185,28 +194,19 @@ class _GifResultTileState extends State<GifResultTile>
       if (!mounted) return;
       final box = context.findRenderObject();
       if (box is! RenderBox || !box.hasSize || !box.attached) return;
-      final bounds = box.localToGlobal(Offset.zero) & box.size;
-      var viewportBounds = Offset.zero & MediaQuery.sizeOf(context);
-      final viewport = RenderAbstractViewport.maybeOf(box);
-      if (viewport is RenderBox) {
-        final viewportBox = viewport as RenderBox;
-        if (viewportBox.hasSize) {
-          viewportBounds = viewportBounds.intersect(
-            viewportBox.localToGlobal(Offset.zero) & viewportBox.size,
-          );
-        }
+      final visible = NotionContentLoop.isVisible(
+        box,
+        NotionContentLoop.screenSizeOf(context),
+        fraction: GifResultTile.visibleFraction,
+      );
+      if (!visible) {
+        _evicted = false;
+        if (_visible) _failed = false;
       }
-      final overlap = bounds.intersect(viewportBounds);
-      final visible =
-          bounds.width > 0 &&
-          bounds.height > 0 &&
-          !overlap.isEmpty &&
-          overlap.width * overlap.height / (bounds.width * bounds.height) >=
-              GifResultTile.visibleFraction;
-      if (!visible) _evicted = false;
       _visible = visible;
       _sync();
     });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   void _sync() {
@@ -284,7 +284,7 @@ class _GifResultTileState extends State<GifResultTile>
         return;
       }
       _player = player;
-      await player.initialize();
+      await player.initialize().timeout(NotionContentLoop.initializeTimeout);
       await player.setVolume(0);
       await player.setLooping(true);
       if (generation != _generation || !mounted) return;
@@ -340,6 +340,7 @@ class _GifResultTileState extends State<GifResultTile>
   @override
   void dispose() {
     _disposed = true;
+    RoundPlaybackCoordinator.shared.suspension.removeListener(_resumeLoops);
     WidgetsBinding.instance.removeObserver(this);
     _scrollPosition?.removeListener(_scheduleViewport);
     _handle.dispose();

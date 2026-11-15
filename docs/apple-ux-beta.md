@@ -3,6 +3,49 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Larger inbox and expanded GIF search (3583)
+
+Conversation rows use 1.5 times the previous avatar, text and vertical geometry
+at the same saved density. Every unread conversation has a leading accent dot,
+a bold primary-text name and a semibold primary-text preview (white in dark
+appearance). Read conversations keep aligned avatars and regular text. Existing
+unread counts, muted state, filters, timestamps and accessibility labels remain.
+
+GIF search opens a tall sheet with a close button, three columns on standard
+phone widths, and Search below the results. Narrow screens use two columns.
+Keyboard changes preserve the query, focus and provider. Emoji/sticker tabs
+remain available; opening GIFs through the composer uses the larger browser.
+
+GIF images and muted MP4 loops can play in Low Power Mode. Explicit autoplay
+off and accessibility Reduce Motion still stop them. Muted loops now respond
+to global unlock/resume, retry temporary initialization failures after leaving
+and returning to the viewport, and time out initialization rather than waiting
+forever. Visibility uses the Flutter view's global coordinates and keyboard
+occlusion, fixing false off-screen results inside a smaller pane/MediaQuery.
+The shared player budget, background/lock and audible-player rules remain.
+
+Production widget captures:
+[larger inbox, dark](apple-ux-beta/inbox-readable-dark.png),
+[light](apple-ux-beta/inbox-readable-light.png),
+[expanded GIFs, dark](apple-ux-beta/gif-expanded-dark.png),
+[light](apple-ux-beta/gif-expanded-light.png).
+These use fictional offline contacts and synthetic media stills on Windows;
+they demonstrate layout, not native iOS decoding or live provider delivery.
+
+The proposed reuse of upstream round-video recording on additional networks
+is documented in [the cross-network round-video plan](round-video-networks.md).
+The iOS recorder and additional send routes are not part of build 3583.
+
+136 offline regressions pass, including muted-loop Low Power Mode, unlock,
+temporary-error recovery, nested viewport coordinates, autoplay/Reduce Motion
+guards, shared audible permits, GIF search/provider isolation, keyboard focus,
+draft preservation, narrow/landscape/2x layouts, row alignment and unread state.
+The strict design-token check passes with no new debt. Full app/changed-test
+analysis reports zero errors/warnings and the same 70 existing infos; all 17
+focused source/test paths are clean with fatal infos enabled. The standalone
+presentation harness still lacks `docs/notion-ui/SOURCE-SNAPSHOT.json`; the
+captures above come from production widget tests instead.
+
 ## Network changes and frequently used reactions (3582)
 
 Merged conversations replace repeated visible **via Messenger/WhatsApp**

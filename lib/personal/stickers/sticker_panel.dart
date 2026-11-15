@@ -39,8 +39,10 @@ class StickerPanel extends StatefulWidget {
     required this.host,
     this.searchFocus,
     this.library,
-    @visibleForTesting this.gifSource,
-    @visibleForTesting this.loadGifCredentials = true,
+    this.gifSource,
+    this.loadGifCredentials = true,
+    this.onTabChanged,
+    this.expandedGifs = false,
   });
 
   final ConversationComposerHost host;
@@ -48,8 +50,11 @@ class StickerPanel extends StatefulWidget {
   /// Focus node for the search fields of the GIF and sticker tabs.
   final FocusNode? searchFocus;
   final StickerLibrary? library;
+  /// Optional source/credential policy forwarded by an enclosing media browser.
   final PublicGifSearch? gifSource;
   final bool loadGifCredentials;
+  final ValueChanged<StickerPanelTab>? onTabChanged;
+  final bool expandedGifs;
 
   static const _tabKey = 'pl.personal.composer.panel_tab';
   static StickerPanelTab? _lastTab;
@@ -160,6 +165,7 @@ class _StickerPanelState extends State<StickerPanel>
     } else {
       _switch.forward(from: 0);
     }
+    widget.onTabChanged?.call(tab);
   }
 
   Widget _content(StickerPanelTab tab) => switch (tab) {
@@ -170,6 +176,7 @@ class _StickerPanelState extends State<StickerPanel>
       loadCredentials: widget.loadGifCredentials,
       searchFocus: _gifSearch,
       library: widget.library,
+      searchAtBottom: widget.expandedGifs,
     ),
     StickerPanelTab.stickers => StickerTab(
       host: widget.host,

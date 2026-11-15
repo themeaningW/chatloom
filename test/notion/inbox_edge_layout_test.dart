@@ -129,7 +129,7 @@ void main() {
         expect(tester.getTopLeft(find.text('All networks')).dx, leading);
         expect(
           tester.getTopLeft(find.byKey(const ValueKey('avatar-0'))).dx,
-          leading,
+          leading + NotionSpace.md,
         );
         expect(tester.getTopRight(find.text('16:36')).dx, trailing);
         expect(
@@ -177,12 +177,12 @@ void main() {
       final avatar = tester.getRect(find.byKey(const ValueKey('avatar-0')));
       final ltr = direction == TextDirection.ltr;
       if (ltr) {
-        expect(avatar.left, 60);
+        expect(avatar.left, 60 + NotionSpace.md);
         expect(time.right, pane.right - 16);
         expect(sidePadding!.left, 0);
         expect(sidePadding!.right, 34);
       } else {
-        expect(avatar.right, 844 - 34 - 16);
+        expect(avatar.right, 844 - 34 - 16 - NotionSpace.md);
         expect(time.left, pane.left + 16);
         expect(sidePadding!.left, 44);
         expect(sidePadding!.right, 0);
@@ -236,7 +236,9 @@ void main() {
   for (final brightness in Brightness.values) {
     testWidgets('edge layout capture in ${brightness.name}', (tester) async {
       await mount(tester, size: const Size(430, 932), brightness: brightness);
-      final directory = Platform.environment['CHATLOOM_INBOX_EDGE_CAPTURE_DIR'];
+      final readable = Platform.environment['CHATLOOM_READABLE_CAPTURE_DIR'];
+      final directory =
+          readable ?? Platform.environment['CHATLOOM_INBOX_EDGE_CAPTURE_DIR'];
       if (directory != null) {
         final boundary = tester.renderObject<RenderRepaintBoundary>(
           find.byKey(const ValueKey('capture-inbox-edge')),
@@ -244,7 +246,9 @@ void main() {
         await tester.runAsync(() async {
           final image = await boundary.toImage(pixelRatio: 2);
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          final file = File('$directory/inbox-edge-${brightness.name}.png');
+          final file = File(
+            '$directory/inbox-${readable != null ? 'readable' : 'edge'}-${brightness.name}.png',
+          );
           await file.parent.create(recursive: true);
           await file.writeAsBytes(bytes!.buffer.asUint8List());
           image.dispose();

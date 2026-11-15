@@ -119,6 +119,32 @@ Event _image(Client client, String mimetype) => Event(
 
 void main() {
   group('NotionContentLoopGate', () {
+    for (final respectPowerSaving in [false, true]) {
+      testWidgets('media battery policy is explicit: $respectPowerSaving', (
+        tester,
+      ) async {
+        final powerSaving = ValueNotifier(true);
+        addTearDown(powerSaving.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: NotionActivity(
+              powerSaving: powerSaving,
+              child: NotionContentLoopGate(
+                respectPowerSaving: respectPowerSaving,
+                child: const _Loop(),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(_gateOn(tester), !respectPowerSaving);
+        powerSaving.value = false;
+        await tester.pump();
+        await tester.pump();
+        expect(_gateOn(tester), isTrue);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
     // Active, unmuted tickers register a transient frame callback; a muted
     // (gated) ticker registers none and draws no frames.
     testWidgets('loops on screen, rests off screen, resumes on return', (

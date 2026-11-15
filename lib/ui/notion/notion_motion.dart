@@ -251,7 +251,9 @@ abstract final class NotionMotion {
   /// ([NotionActivity]: another app has focus, the window is hidden). The
   /// single reduced-motion check for the whole app; depends only on the
   /// `disableAnimations` aspect of [MediaQuery] and on [NotionActivity].
-  static bool reduced(BuildContext context) =>
+  // Content GIFs opt out of the battery-only decoration policy; accessibility,
+  // explicit Reduce Motion and foreground policy remain shared and mandatory.
+  static bool reduced(BuildContext context, {bool includePowerSaving = true}) =>
       NotionDisplayPreferences.of(context).reduceMotion ||
       (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ||
       WidgetsBinding
@@ -260,7 +262,7 @@ abstract final class NotionMotion {
           .accessibilityFeatures
           .reduceMotion ||
       !NotionActivity.isActive(context) ||
-      NotionActivity.isPowerSaving(context);
+      (includePowerSaving && NotionActivity.isPowerSaving(context));
 
   /// Completes once the route that hosts [context], and every page route
   /// around it (a nested navigator's shell sliding in), has finished its

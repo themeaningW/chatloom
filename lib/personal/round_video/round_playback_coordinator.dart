@@ -70,10 +70,16 @@ class RoundPlaybackCoordinator {
   RoundPlaybackHandle? _audible;
   RoundContinuationToken? _continuation;
   int _generation = 0;
-  bool _suspended = false;
+  final _suspension = ValueNotifier(false);
+  bool get _suspended => _suspension.value;
+  set _suspended(bool value) => _suspension.value = value;
   bool _stopFailed = false;
 
   bool get suspended => _suspended;
+
+  /// Muted loops re-evaluate after unlock/resume; audible players still
+  /// require their own explicit permit and are never resumed here.
+  ValueListenable<bool> get suspension => _suspension;
 
   /// Whether an autoplay continuation is reserved (for tests and diagnostics).
   bool get continuing => _continuation != null;
@@ -170,7 +176,7 @@ class RoundPlaybackCoordinator {
   /// Invalidates pending downloads immediately, before awaiting codec cleanup.
   /// With [retain] (background without a lock) players registered with
   /// `retain` only pause and keep their position; every other one stops.
-  /// Nothing resumes by itself either way.
+  /// Audible media never resumes by itself either way.
   ///
   /// [spareHidden] (a desktop window hidden without a lock, MAC-04) leaves
   /// players registered with `keepWhileHidden` untouched: an audible one
@@ -223,7 +229,7 @@ class RoundPlaybackCoordinator {
   }
 
   /// Returning to foreground/unlocking permits a new explicit play action.
-  /// This method never resumes a player or flushes a played receipt.
+  /// Muted loops may re-evaluate; audible media and played receipts stay idle.
   void resume() => _suspended = _stopFailed;
 
   void _unregister(RoundPlaybackHandle player) {

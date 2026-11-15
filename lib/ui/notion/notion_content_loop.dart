@@ -9,6 +9,21 @@ import 'notion_motion.dart';
 /// `setVisibleOnScreen`. A loop plays only while at least [visibleFraction]
 /// of it is inside its scroll viewport and the screen.
 abstract final class NotionContentLoop {
+  static const initializeTimeout = Duration(seconds: 20);
+
+  /// RenderBox global coordinates belong to the Flutter view, even inside a
+  /// pane/sheet with a smaller MediaQuery. Exclude the keyboard's occlusion.
+  static Size screenSizeOf(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final view = View.of(context);
+    final size = view.physicalSize / view.devicePixelRatio;
+    final nativeInset = view.viewInsets.bottom / view.devicePixelRatio;
+    final inset = media.viewInsets.bottom > nativeInset
+        ? media.viewInsets.bottom
+        : nativeInset;
+    return Size(size.width, (size.height - inset).clamp(0.0, size.height));
+  }
+
   /// Share of the frame that must be visible to play.
   static const double visibleFraction = .5;
 
@@ -67,6 +82,7 @@ class NotionContentLoopGate extends StatefulWidget {
   const NotionContentLoopGate({
     super.key,
     required this.child,
+    this.respectPowerSaving = true,
     this.enabled = true,
   });
 
@@ -74,6 +90,10 @@ class NotionContentLoopGate extends StatefulWidget {
 
   /// The caller allows the loop at all.
   final bool enabled;
+
+  /// User-requested media can play in Low Power Mode while accessibility
+  /// Reduce Motion and the explicit autoplay preference remain authoritative.
+  final bool respectPowerSaving;
 
   @override
   State<NotionContentLoopGate> createState() => _NotionContentLoopGateState();
@@ -93,14 +113,21 @@ class _NotionContentLoopGateState extends State<NotionContentLoopGate> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ancestorTickers = TickerMode.valuesOf(context).enabled;
-    _reduced = NotionMotion.reduced(context);
-    _screen = MediaQuery.sizeOf(context);
+    _reduced = NotionMotion.reduced(
+      context,
+      includePowerSaving: widget.respectPowerSaving,
+    );
+    _screen = NotionContentLoop.screenSizeOf(context);
     _sync();
   }
 
   @override
   void didUpdateWidget(NotionContentLoopGate oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _reduced = NotionMotion.reduced(
+      context,
+      includePowerSaving: widget.respectPowerSaving,
+    );
     _sync();
   }
 

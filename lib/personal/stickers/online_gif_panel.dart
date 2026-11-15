@@ -39,12 +39,14 @@ class OnlineGifPanel extends StatefulWidget {
     this.source,
     this.loadCredentials = true,
     this.send,
+    this.searchAtBottom = false,
   });
   final ConversationComposerHost host;
   final FocusNode? searchFocus;
   final StickerLibrary? library;
   final PublicGifSearch? source;
   final bool loadCredentials;
+  final bool searchAtBottom;
 
   /// The shared outgoing queue by default; injectable for offline acceptance.
   final Future<void> Function(GifSendRequest)? send;
@@ -444,44 +446,9 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
             ),
           )
         else ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: NotionSpace.xs),
-            child: Focus(
-              canRequestFocus: false,
-              skipTraversal: true,
-              onFocusChange: (focused) {
-                if (mounted && focused != _searchFocused) {
-                  setState(() => _searchFocused = focused);
-                }
-              },
-              child: TextField(
-                key: const ValueKey('klipy-search'),
-                controller: _query,
-                focusNode: widget.searchFocus,
-                style: context.notion.typography.callout,
-                textInputAction: TextInputAction.search,
-                onChanged: _typed,
-                onSubmitted: (_) => unawaited(_search()),
-                decoration: InputDecoration(
-                  hintText: _source.hint,
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _busy
-                      ? const NotionDelayedSpinner(size: NotionSize.iconSm)
-                      : NotionIconButton(
-                          icon: Icons.close,
-                          label: 'Clear search',
-                          onPressed: () {
-                            _query.clear();
-                            _typed('');
-                          },
-                        ),
-                  helperMaxLines: 2,
-                ),
-              ),
-            ),
-          ),
+          if (!widget.searchAtBottom) _searchField(context),
           Expanded(child: _body(context)),
+          if (widget.searchAtBottom) _searchField(context),
           Padding(
             padding: const EdgeInsets.all(NotionSpace.xxs),
             child: _source.provider == GifProvider.giphy
@@ -501,6 +468,44 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
       ],
     );
   }
+
+  Widget _searchField(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: NotionSpace.xs),
+    child: Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (focused) {
+        if (mounted && focused != _searchFocused) {
+          setState(() => _searchFocused = focused);
+        }
+      },
+      child: TextField(
+        key: const ValueKey('klipy-search'),
+        controller: _query,
+        focusNode: widget.searchFocus,
+        style: context.notion.typography.callout,
+        textInputAction: TextInputAction.search,
+        onChanged: _typed,
+        onSubmitted: (_) => unawaited(_search()),
+        decoration: InputDecoration(
+          hintText: _source.hint,
+          isDense: true,
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _busy
+              ? const NotionDelayedSpinner(size: NotionSize.iconSm)
+              : NotionIconButton(
+                  icon: Icons.close,
+                  label: 'Clear search',
+                  onPressed: () {
+                    _query.clear();
+                    _typed('');
+                  },
+                ),
+          helperMaxLines: 2,
+        ),
+      ),
+    ),
+  );
 
   Widget _body(BuildContext context) {
     if (!_source.configured) {
@@ -539,7 +544,10 @@ class _OnlineGifPanelState extends State<OnlineGifPanel> {
     }
     return LayoutBuilder(
       builder: (context, box) {
-        final columns = box.maxWidth < 350 ? 2 : 3;
+        final threeColumnWidth = widget.searchAtBottom
+            ? NotionComposerPanelSize.expandedThreeColumnWidth
+            : 350.0;
+        final columns = box.maxWidth < threeColumnWidth ? 2 : 3;
         final size = (box.maxWidth - NotionSpace.xxs * (columns + 1)) / columns;
         return CustomScrollView(
           controller: _scroll,

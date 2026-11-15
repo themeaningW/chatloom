@@ -3,9 +3,6 @@ import 'package:chatloom/personal/ui/notion_inbox_network_badge.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Diameter of the manual-unread dot.
-const double _unreadDot = 10;
-
 /// Diameter of a typing dot in the preview line (the dots are 4.5× as wide).
 const double _typingDot = 4;
 
@@ -16,8 +13,11 @@ class NotionInboxRow extends StatelessWidget {
   static double contentInsetOf(BuildContext context) {
     final display = NotionDisplayPreferences.of(context);
     return NotionSpace.xxs +
+        NotionSpace.md +
         (display.inboxAvatars
-            ? (NotionSize.avatarLg + NotionSpace.xs) * display.inboxScale
+            ? (NotionSize.avatarLg + NotionSpace.xs) *
+                  display.inboxScale *
+                  NotionInboxSize.magnification
             : 0);
   }
 
@@ -103,7 +103,9 @@ class NotionInboxRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final display = NotionDisplayPreferences.of(context);
-    final scale = display.inboxScale;
+    final scale = display.inboxScale * NotionInboxSize.magnification;
+    final textScale =
+        (1 + display.inboxScale) / 2 * NotionInboxSize.magnification;
     final large = MediaQuery.textScalerOf(context).scale(16) > 22;
     final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
     final colors = context.notion.colors;
@@ -136,7 +138,11 @@ class NotionInboxRow extends StatelessWidget {
       ?tag,
       ?notionNetworksAnnouncement(networks),
     ];
-    final previewColor = typing ? colors.accent : secondary;
+    final previewColor = typing
+        ? colors.accent
+        : hasUnread
+        ? unreadInk
+        : secondary;
     return Semantics(
       button: true,
       selected: selected,
@@ -179,6 +185,28 @@ class NotionInboxRow extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        ExcludeSemantics(
+                          child: SizedBox(
+                            width: NotionSpace.md,
+                            height: NotionSize.avatarLg * scale,
+                            child: Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: hasUnread
+                                  ? Container(
+                                      key: const ValueKey(
+                                        'notion_inbox_unread_dot',
+                                      ),
+                                      width: NotionInboxSize.unreadDot,
+                                      height: NotionInboxSize.unreadDot,
+                                      decoration: BoxDecoration(
+                                        color: palette.accentFill,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
                         if (display.inboxAvatars)
                           ExcludeSemantics(
                             child: SizedBox.square(
@@ -229,17 +257,15 @@ class NotionInboxRow extends StatelessWidget {
                                             .notion
                                             .typography
                                             .headline
-                                            .apply(
-                                              fontSizeFactor: (1 + scale) / 2,
-                                            )
+                                            .apply(fontSizeFactor: textScale)
                                             .copyWith(
                                               height: 1.25,
-                                              color: hasUnread && !muted
+                                              color: hasUnread
                                                   ? unreadInk
                                                   : colors.text,
                                               fontWeight: hasUnread
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w500,
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w400,
                                             ),
                                       ),
                                     ),
@@ -326,12 +352,14 @@ class NotionInboxRow extends StatelessWidget {
                                                 .typography
                                                 .callout
                                                 .apply(
-                                                  fontSizeFactor:
-                                                      (1 + scale) / 2,
+                                                  fontSizeFactor: textScale,
                                                 )
                                                 .copyWith(
                                                   height: 1.3,
                                                   color: previewColor,
+                                                  fontWeight: hasUnread
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w400,
                                                   // A draft, or the muted
                                                   // words of a deleted
                                                   // message (as its bubble).
@@ -379,6 +407,10 @@ class NotionInboxRow extends StatelessWidget {
                                             .notion
                                             .typography
                                             .footnote
+                                            .apply(
+                                              fontSizeFactor:
+                                                  NotionInboxSize.magnification,
+                                            )
                                             .copyWith(
                                               color: secondary,
                                               fontWeight: hasUnread
@@ -462,25 +494,6 @@ class NotionInboxRow extends StatelessWidget {
                                         child: _MentionBadge(
                                           color: palette.accentFill,
                                           text: palette.onAccentFill,
-                                        ),
-                                      )
-                                    : unread
-                                    // Marked unread by hand: a plain dot, no count.
-                                    ? Padding(
-                                        key: const ValueKey('dot'),
-                                        padding: const EdgeInsets.only(
-                                          top: NotionSpace.xs,
-                                        ),
-                                        child: Container(
-                                          key: const ValueKey(
-                                            'notion_inbox_unread_dot',
-                                          ),
-                                          width: _unreadDot,
-                                          height: _unreadDot,
-                                          decoration: BoxDecoration(
-                                            color: badgeColor,
-                                            shape: BoxShape.circle,
-                                          ),
                                         ),
                                       )
                                     : pinned

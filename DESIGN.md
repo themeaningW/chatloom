@@ -365,22 +365,38 @@ Message bubbles keep their own geometry (`NotionBubble`).
 `iconSm 16 / icon 20 / iconMd 22 / iconLg 24`, avatars `24 / 40 / 56`,
 `dialogMaxWidth 420`, `contentMaxWidth 720`.
 
-Inbox conversation rows default to 75% density: 42 dp avatars, 15 dp
-vertical padding and 6 dp between name and preview (a 72 dp row at standard
-text scaling, Telegram's height; 96 dp at 100%). Rows sit `NotionSpace.listGap`
+Inbox conversation rows retain the saved 75% density preference and apply
+`NotionInboxSize.magnification` (1.5) to avatar, text and vertical geometry:
+the default avatar is now 63 dp. The leading 16 dp gutter reserves an 8 dp
+accent dot for every unread conversation; read rows keep identical alignment.
+Rows sit `NotionSpace.listGap`
 (4 dp) apart: each list item keeps `NotionSpace.listItem` (half the gap above
 and below) inside its `NotionListMotionItem` and outside the swipe action, so
 adjacent unread or selected highlights never touch, reorder offsets include
-the gap and the swipe pill matches the highlight. Names and
-previews retain 87.5% of their original type size for readability. Settings →
+the gap and the swipe pill matches the highlight. Names and previews use
+1.5 times their previous size at the same density. Settings →
 Appearance → Chat list offers a 65–100% row scale, avatars, previews, network
 badges, timestamps and unread highlighting. Rows retain a 48 dp minimum tap
 target, grow with accessible text sizes, and preserve unread counts and spoken
-labels when secondary visuals are hidden. Unread conversations use `palette.accentTint` with contrast-checked
-accent names/timestamps, bold names and a count or manual-unread dot.
+labels when secondary visuals are hidden. Unread conversations use primary,
+contrast-checked text (white in dark appearance), bold names and semibold
+previews, with the leading accent dot and the existing count badge.
 Selected conversations retain the selected surface; muted conversations keep
-neutral surfaces and badges but retain bold unread names. Read state therefore
+neutral surfaces and badges but retain the leading dot and bold unread text. Read state therefore
 remains identifiable without relying on colour. Rows grow with text scaling.
+
+GIF search opens `ExpandedStickerPanel` through `showNotionSheet`: a tall
+browser (up to 92% of the available screen), a close button, results above
+Search, and one keyboard inset. Three result columns fit standard phones;
+narrow screens use two. Query, focus, selected provider and grid state survive
+keyboard resizing. Emoji and sticker tabs keep their compact composer slot.
+Content GIFs opt out of the battery-only decoration pause with
+`NotionMotion.reduced(includePowerSaving: false)` / the content-loop gate's
+`respectPowerSaving: false`. Explicit autoplay-off, accessibility Reduce Motion,
+foreground, lock, route, viewport and player-budget rules still apply. A global
+unlock/resume signals muted players to re-evaluate, without resuming audible
+media or emitting played receipts. Global viewport coordinates use the Flutter
+view and keyboard occlusion, rather than a nested pane's local MediaQuery size.
 
 ### Transitional static API
 
