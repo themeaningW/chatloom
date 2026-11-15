@@ -34,6 +34,13 @@ real GIF/WebP image decoding, playback gates and diagnostic privacy/bounds.
 Full app analysis has no errors or warnings; strict design lint adds no debt.
 Native installation and live media acceptance are recorded separately.
 
+The 3585 release/AOT bundle was signed and installed over USB on 2026-11-15;
+InstallationProxy independently confirmed version 2.10.0, build 3585. Native
+AVFoundation and the enabled fixed-metadata diagnostic are present in the
+bundle. iOS rejected automatic launch, so opening the installed app manually
+is still required. The first diagnostic read contained no media samples;
+received-source diagnosis and physical sent-GIF autoplay remain pending.
+
 ## Original typography, adjustable rows and inline animation (3584)
 
 This corrects build 3583's over-large labels. Names, message previews and times
