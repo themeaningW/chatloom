@@ -87,7 +87,8 @@ try {
         throw 'Native shake channels or scene window were not installed'
     }
     if ($patched -notmatch 'methodChannelWithName:@"chatloom/ios_accessibility"' -or
-        $patched -notmatch 'AXAnimatedImagesEnabled\(\)' -or
+        $patched -notmatch 'dlsym\(_accessibilityLibrary, "AXAnimatedImagesEnabled"\)' -or
+        $patched -notmatch '_animatedImagesEnabled != NULL' -or
         $patched -notmatch 'AXAnimatedImagesEnabledDidChangeNotification' -or
         $patched -notmatch 'UIAccessibilityIsReduceTransparencyEnabled\(\)' -or
         $patched -notmatch '\[\[ChatLoomAccessibilityBridge shared\] registerWithMessenger:messenger\]') {
@@ -141,10 +142,10 @@ try {
     [IO.File]::WriteAllText($runnerSource, $patched)
     $link = @((Join-Path $runnerRoot 'Runner.o'), '-o', (Join-Path $runnerRoot 'Runner'))
     & $shim @link
-    Assert-Arguments ($link + @('-framework', 'Accessibility'))
+    Assert-Arguments $link
     $linkWithFramework = $link + @('-framework', 'UserNotifications')
     & $shim @linkWithFramework
-    Assert-Arguments ($linkWithFramework + @('-framework', 'Accessibility'))
+    Assert-Arguments $linkWithFramework
     $otherRoot = Join-Path $fixtureRoot 'other'
     [IO.Directory]::CreateDirectory($otherRoot) | Out-Null
     $otherSource = Join-Path $otherRoot 'Runner.m'
@@ -190,7 +191,7 @@ try {
     [IO.File]::WriteAllText($env:CHATLOOM_TEST_CLANG_ARGS, 'not invoked')
     & $shim @arguments
     if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($env:CHATLOOM_TEST_CLANG_ARGS) -cne 'not invoked') { throw 'Unsupported source did not fail before compiler invocation' }
-    Write-Output 'PASS: notification/shake channels, nonce envelope/cleanup, startup window, foreground/undo policy source, exact argv/exit forwarding, regeneration, notification-only upgrade, line endings, idempotence, accessibility channel/API registration, scoped framework linking and unsupported-source rejection.'
+    Write-Output 'PASS: notification/shake channels, nonce envelope/cleanup, startup window, foreground/undo policy source, exact argv/exit forwarding, regeneration, notification-only upgrade, line endings, idempotence, accessibility channel/API registration, public API runtime resolution and unchanged linker arguments and unsupported-source rejection.'
 } finally {
     $env:CC = $previousCc
     $env:XCROSS_APPLE_TOOL_CLANG = $previousClang

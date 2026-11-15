@@ -192,17 +192,12 @@ internal static class ChatLoomClang {
     private static int Main(string[] arguments) {
         try {
             bool compilesRunner = false;
-            bool runnerObject = false;
-            bool compileOnly = false;
             for (int i = 0; i < arguments.Length; i++) {
                 compilesRunner |= SamePath(arguments[i], RunnerSource);
-                runnerObject |= SamePath(arguments[i], Path.ChangeExtension(RunnerSource, ".o"));
-                compileOnly |= arguments[i] == "-c";
             }
             if (compilesRunner) PrepareRunner();
             StringBuilder forwarded = new StringBuilder();
             foreach (string argument in arguments) forwarded.Append(Quote(argument)).Append(' ');
-            if (!compileOnly && (compilesRunner || runnerObject)) forwarded.Append(" -framework Accessibility ");
             if (NeedsPinnedPluginCompatibility(arguments)) forwarded.Append("-Wno-error=incompatible-pointer-types");
             ProcessStartInfo start = new ProcessStartInfo(RealClang, forwarded.ToString());
             start.UseShellExecute = false;

@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-#import <Accessibility/Accessibility.h>
+#import <dlfcn.h>
 
-@interface ChatLoomAccessibilityBridge : NSObject
+// xcross links Runner with ld64 directly (no Clang availability runtime).
+// Resolve these public iOS 17+ symbols from Apple's system framework so the
+// same runner also starts on older iOS, where the media signal stays null.
+
+@interface ChatLoomAccessibilityBridge : NSObject {
+  void* _accessibilityLibrary;
+  BOOL (*_animatedImagesEnabled)(void);
+}
 @property(nonatomic, strong) FlutterMethodChannel* channel;
 + (instancetype)shared;
 - (void)registerWithMessenger:(NSObject<FlutterBinaryMessenger>*)messenger;
@@ -22,15 +29,20 @@
         UIAccessibilityReduceTransparencyStatusDidChangeNotification, UIApplicationDidBecomeActiveNotification]) {
       [center addObserver:self selector:@selector(settingsChanged) name:name object:nil];
     }
-    if (@available(iOS 17.0, *)) {
-      [center addObserver:self selector:@selector(settingsChanged) name:AXAnimatedImagesEnabledDidChangeNotification object:nil];
+    _accessibilityLibrary = dlopen("/System/Library/Frameworks/Accessibility.framework/Accessibility", RTLD_LAZY | RTLD_LOCAL);
+    if (_accessibilityLibrary != NULL) {
+      _animatedImagesEnabled = (BOOL (*)(void))dlsym(_accessibilityLibrary, "AXAnimatedImagesEnabled");
+      CFStringRef const* notification = (CFStringRef const*)dlsym(_accessibilityLibrary, "AXAnimatedImagesEnabledDidChangeNotification");
+      if (notification != NULL && *notification != NULL) {
+        [center addObserver:self selector:@selector(settingsChanged) name:(__bridge NSString*)*notification object:nil];
+      }
     }
   }
   return self;
 }
 - (NSDictionary*)snapshot {
   id animated = [NSNull null];
-  if (@available(iOS 17.0, *)) animated = @(AXAnimatedImagesEnabled());
+  if (_animatedImagesEnabled != NULL) animated = @(_animatedImagesEnabled());
   return @{@"reduceMotion": @(UIAccessibilityIsReduceMotionEnabled()),
            @"reduceTransparency": @(UIAccessibilityIsReduceTransparencyEnabled()),
            @"animatedImages": animated};

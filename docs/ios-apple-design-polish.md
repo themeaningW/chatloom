@@ -36,7 +36,10 @@ Branch: `feat/apple-ux-paste-beta`. One shared Flutter application remains in
 
 Xcode uses `AppDelegate.swift`. The Windows xcross path compiles the equivalent
 Objective-C bridge through `prepare-xcross-runner.ps1`; its scoped compiler
-adapter links Accessibility only for the app runner. `test-prepare-xcross-runner.ps1`
+adapter preserves linker arguments. The Windows bridge resolves the public
+Accessibility framework symbols at runtime, because xcross invokes ld64
+without Clang's availability runtime. Missing symbols retain the older-system
+fallback. Xcode uses normal Swift framework linking. `test-prepare-xcross-runner.ps1`
 checks both the original hooks and accessibility registration, argument
 transport, unrelated files and rejection of changed/unsupported generated code.
 An xcross build does not validate the Swift runner in Xcode.
