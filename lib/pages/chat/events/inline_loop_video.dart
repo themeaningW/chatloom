@@ -7,7 +7,9 @@ import 'package:chatloom/pages/chat/conversation_bubble.dart'
     show ConversationMedia;
 import 'package:chatloom/pages/chat/conversation_message_gestures.dart';
 import 'package:chatloom/pages/image_viewer/image_viewer.dart';
+import 'package:chatloom/personal/media/gif_metadata.dart';
 import 'package:chatloom/personal/media/media_access.dart';
+import 'package:chatloom/personal/media/media_playback_diagnostics.dart';
 import 'package:chatloom/personal/round_video/round_playback_coordinator.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/utils/platform_infos.dart';
@@ -96,10 +98,7 @@ class InlineLoopVideo extends StatefulWidget {
     if (isVideoSticker(event)) return true;
     if (event.messageType != MessageTypes.Video) return false;
     if (RoundVideoDescriptor.fromContent(event.content) != null) return false;
-    final info = _info(event);
-    if (info == null) return false;
-    return info['fi.mau.gif'] == true ||
-        (info['fi.mau.autoplay'] == true && info['fi.mau.loop'] == true);
+    return GifMetadata.isVideoLoop(event.content);
   }
 
   /// The box of a video sticker: [side] (see
@@ -261,6 +260,19 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
   /// Starts, resumes, pauses or releases the player to match [_shouldPlay].
   void _sync() {
     if (!mounted) return;
+    MediaPlaybackDiagnostics.record(
+      widget.event,
+      _shouldPlay
+          ? MediaPlaybackPhase.loopStarting
+          : MediaPlaybackPhase.loopGated,
+      supported: _supported,
+      reduced: _reduced,
+      visible: _visible,
+      tickers: _tickers,
+      route: _routeCurrent,
+      active: _appActive,
+      suspended: RoundPlaybackCoordinator.shared.suspended,
+    );
     final player = _player;
     if (_shouldPlay) {
       if (player == null) {
@@ -338,12 +350,22 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
       if (generation != _generation || !mounted) return;
       stage = 'play';
       if (_shouldPlay) await player.play();
+      if (generation == _generation && player.value.isPlaying) {
+        MediaPlaybackDiagnostics.record(
+          widget.event,
+          MediaPlaybackPhase.loopPlaying,
+        );
+      }
       if (mounted && !_disposed && generation == _generation) {
         setState(() {});
       }
     } catch (error) {
       if (generation == _generation) {
         InlineLoopSlots.reportFailure('timeline', stage, error);
+        MediaPlaybackDiagnostics.record(
+          widget.event,
+          MediaPlaybackPhase.loopFailed,
+        );
         await _release();
         // Not playable here (codec, download): the poster stays, a tap
         // still opens the viewer.

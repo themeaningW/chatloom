@@ -10,6 +10,7 @@ import 'dart:typed_data';
 
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/config/themes.dart';
+import 'package:chatloom/personal/media/media_playback_diagnostics.dart';
 import 'package:chatloom/personal/media/protected_matrix_database.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/utils/bounded_byte_cache.dart';
@@ -772,6 +773,13 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
       }
       final data = await _attachment(event, useThumbnail);
       if (!mounted || generation != _generation) return;
+      MediaPlaybackDiagnostics.record(
+        event,
+        useThumbnail
+            ? MediaPlaybackPhase.imageThumbnail
+            : MediaPlaybackPhase.imageOriginal,
+        animatedBytes: MxcImage.isAnimatedImage(data.bytes),
+      );
       if (data.detectFileType is MatrixImageFile && !lottieMime) {
         _accept(data.bytes, key, generation);
         return;
@@ -1213,7 +1221,21 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
       int? frame,
       bool wasSynchronouslyLoaded,
     ) {
-      if (frame != null) _report(MxcImageLoad.ready);
+      if (frame != null) {
+        _report(MxcImageLoad.ready);
+        final event = widget.event;
+        if (event != null && frame <= 1) {
+          MediaPlaybackDiagnostics.record(
+            event,
+            frame == 0
+                ? MediaPlaybackPhase.imageFirstFrame
+                : MediaPlaybackPhase.imageAnimating,
+            animatedBytes: true,
+            tickers: TickerMode.valuesOf(context).enabled,
+            reduced: NotionMotion.reduced(context, includePowerSaving: false),
+          );
+        }
+      }
       return child;
     }
 

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'package:chatloom/personal/media/gif_metadata.dart';
 import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
@@ -7,6 +8,7 @@ import 'package:matrix/matrix.dart';
 /// bridge send the original document); previews, blurhashes and other
 /// decoration are dropped so the synced account data stays small.
 const _keptInfoKeys = {
+  GifMetadata.marker,
   'mimetype',
   'size',
   'w',
@@ -120,7 +122,7 @@ class StickerItem {
       kind = StickerKind.sticker;
     } else if (event.type == EventTypes.Message &&
         content['msgtype'] == MessageTypes.Video &&
-        info?['fi.mau.gif'] == true) {
+        GifMetadata.isVideoLoop(content)) {
       kind = info?['fi.mau.telegram.animated_sticker'] == true
           ? StickerKind.sticker
           : StickerKind.gif;
@@ -146,7 +148,11 @@ class StickerItem {
         'body': body is String && body.isNotEmpty
             ? body
             : (kind == StickerKind.gif ? 'GIF' : 'Sticker'),
-        'info': _trimInfo(info),
+        'info': {
+          ..._trimInfo(info),
+          if (kind == StickerKind.gif && msgtype == MessageTypes.Video)
+            GifMetadata.marker: true,
+        },
         'msgtype': ?msgtype,
       },
       0,

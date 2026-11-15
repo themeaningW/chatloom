@@ -7,12 +7,15 @@ import 'dart:async';
 import 'package:chatloom/config/setting_keys.dart';
 import 'package:chatloom/pages/chat/events/inline_loop_video.dart';
 import 'package:chatloom/pages/chat/events/link_preview.dart';
+import 'package:chatloom/pages/chat/events/message_content.dart';
 import 'package:chatloom/pages/chat/media_album.dart';
+import 'package:chatloom/personal/media/gif_metadata.dart';
 import 'package:chatloom/ui/notion/notion.dart';
 import 'package:chatloom/ui/notion/notion_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
+import 'package:matrix/src/models/timeline_chunk.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 // ignore: depend_on_referenced_packages
@@ -326,6 +329,76 @@ void main() {
         child: app!,
       ),
       home: Scaffold(body: Center(child: child)),
+    );
+
+    testWidgets(
+      'sent and legacy provider GIFs use the production inline renderer without a tap',
+      (tester) async {
+        for (final name in ['new.gif.mp4', 'KLIPY GIF.mp4', 'GIPHY GIF.mp4']) {
+          final sent = event(r'$sent-loop', {
+            'msgtype': MessageTypes.Video,
+            'body': name,
+            'url': 'mxc://example.invalid/sent-loop',
+            'info': {
+              'mimetype': 'video/mp4',
+              'w': 320,
+              'h': 180,
+              if (name == 'new.gif.mp4') GifMetadata.marker: true,
+            },
+          });
+          final timeline = Timeline(
+            room: room,
+            chunk: TimelineChunk(events: [sent]),
+          );
+          await tester.pumpWidget(
+            app(
+              SizedBox(
+                width: 320,
+                child: MessageContent(
+                  sent,
+                  timeline: timeline,
+                  textColor: NotionColors.dark.text,
+                  linkColor: NotionColors.dark.accent,
+                  borderRadius: NotionRadius.mdAll,
+                  selected: false,
+                  bigEmojis: const {},
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+          expect(find.byType(InlineLoopVideo), findsOneWidget, reason: name);
+          expect(platform.playing, isNotEmpty, reason: name);
+          await tester.pumpWidget(app(const SizedBox()));
+          await tester.pump();
+          timeline.cancelSubscriptions();
+        }
+      },
+    );
+
+    test(
+      'ordinary videos and audio clips never become GIFs by filename extension',
+      () {
+        for (final name in [
+          'KLIPY clip.mp4',
+          'clip.mp4',
+          'GIF',
+          'my GIF.mp4',
+        ]) {
+          expect(
+            InlineLoopVideo.applies(
+              event(r'$clip', {
+                'msgtype': MessageTypes.Video,
+                'body': name,
+                'info': {'mimetype': 'video/mp4', 'duration': 1000},
+              }),
+            ),
+            isFalse,
+            reason: name,
+          );
+        }
+      },
     );
 
     testWidgets('plays muted while visible and pauses under TickerMode off', (

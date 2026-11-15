@@ -18,6 +18,7 @@ import 'package:chatloom/personal/deleted_messages.dart';
 import 'package:chatloom/personal/encryption/undecryptable_messages.dart';
 import 'package:chatloom/personal/instagram_share.dart';
 import 'package:chatloom/personal/media/gallery_content.dart';
+import 'package:chatloom/personal/media/media_playback_diagnostics.dart';
 import 'package:chatloom/personal/reel_metadata.dart';
 import 'package:chatloom/personal/round_video/round_playback_queue.dart';
 import 'package:chatloom/personal/stickers/sticker_message_actions.dart';
@@ -237,6 +238,10 @@ class MessageContent extends StatelessWidget {
           case MessageTypes.Image:
           case MessageTypes.Sticker:
             if (event.redacted) continue textmessage;
+            MediaPlaybackDiagnostics.record(
+              event,
+              MediaPlaybackPhase.imageRoute,
+            );
             // Stickers sent or bridged as images are stickers too (a
             // Messenger room gets ChatLoom's stickers as `m.image`).
             final sticker =
@@ -347,6 +352,10 @@ class MessageContent extends StatelessWidget {
             }
             // Bridged GIFs and Telegram video stickers: muted inline loops.
             if (InlineLoopVideo.applies(event)) {
+              MediaPlaybackDiagnostics.record(
+                event,
+                MediaPlaybackPhase.loopRoute,
+              );
               final sticker = InlineLoopVideo.isVideoSticker(event);
               final info = event.content.tryGetMap<String, Object?>('info');
               return LayoutBuilder(
@@ -401,6 +410,10 @@ class MessageContent extends StatelessWidget {
                 ],
               );
             }
+            MediaPlaybackDiagnostics.record(
+              event,
+              MediaPlaybackPhase.videoRoute,
+            );
             return EventVideoPlayer(
               event,
               textColor: textColor,

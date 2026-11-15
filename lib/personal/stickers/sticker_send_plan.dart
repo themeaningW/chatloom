@@ -2,6 +2,7 @@
 import 'package:chatloom/pages/chat/events/sticker_event.dart';
 import 'package:chatloom/personal/capabilities.dart';
 import 'package:chatloom/personal/conversation_classification.dart';
+import 'package:chatloom/personal/media/gif_metadata.dart';
 import 'package:chatloom/personal/personal_client.dart';
 import 'package:chatloom/personal/ui/notion_network_filter.dart';
 import 'package:chatloom/widgets/lottie_sticker_data.dart';
@@ -314,6 +315,11 @@ class StickerSendPlan {
         ..removeWhere((key, _) => _gifFlags.contains(key))
         ..remove('fi.mau.telegram.animated_sticker')
         ..remove('fi.mau.bridged_sticker');
+      // Keep its local looping presentation without asking the bridge to
+      // send an unsupported native GIF. Audio clips have no loop hint.
+      if (item.kind == StickerKind.gif && GifMetadata.hinted(item.info)) {
+        info[GifMetadata.marker] = true;
+      }
       // ChatLoom still draws it at sticker size (bridges ignore the flag).
       if (item.kind == StickerKind.sticker) info[StickerEvents.marker] = true;
       return StickerSendPlan._(StickerSendMode.video, EventTypes.Message, {

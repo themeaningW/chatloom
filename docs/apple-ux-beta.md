@@ -3,6 +3,37 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Sent GIF routing and received-media diagnosis (3585)
+
+Device feedback on 3584: received Messenger/Instagram GIFs remain still even
+in the full-screen viewer; sent search GIFs open as ordinary tap-to-play videos.
+The received-file cause is still under investigation; the previous source fix
+and fixture decoding do not establish acceptance on the reported messages.
+
+The outgoing capability adapter removed `fi.mau.gif` and loop flags when a
+bridge accepts MP4 only as an ordinary video. The local timeline then lost the
+information that this was selected as a GIF. A separate
+`info["pl.personal.chat.gif"]` presentation hint preserves inline muted looping
+without changing the bridge's ordinary-video capability routing. Saved GIFs
+retain that hint. Existing `KLIPY GIF.mp4` and `GIPHY GIF.mp4` downloads also use
+the loop renderer. Ordinary videos, audio clips and round videos keep their
+existing playback rules; arbitrary short videos are not inferred to be GIFs.
+
+The opt-in build flag `CHATLOOM_MEDIA_DIAGNOSTICS=true` records up to 32 local
+technical samples: renderer, fixed MIME category, animated/still byte detection,
+frame advancement and playback gates. It collects no message bodies, filenames,
+media bytes, URLs, event/contact IDs, credentials or exception payloads. It is
+off in ordinary builds. This diagnostic beta is intended to distinguish a
+static file emitted by the bridge from an animated file blocked in the client;
+no remote logging or automatic message sending is introduced.
+
+102 focused regressions pass, including the capability adapter, saved-GIF
+round trips, the production `MessageContent` choosing and starting the inline
+player without a tap, legacy filename recovery, ordinary/audio-video exclusion,
+real GIF/WebP image decoding, playback gates and diagnostic privacy/bounds.
+Full app analysis has no errors or warnings; strict design lint adds no debt.
+Native installation and live media acceptance are recorded separately.
+
 ## Original typography, adjustable rows and inline animation (3584)
 
 This corrects build 3583's over-large labels. Names, message previews and times

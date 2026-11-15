@@ -2,8 +2,10 @@
 // Per-network send adaptation (ST-09). The room_features fixtures follow
 // the bridges' declared file capabilities (mautrix-telegram fork,
 // mautrix-whatsapp with ffmpeg, mautrix-meta, mautrix-slack). Offline.
+import 'package:chatloom/pages/chat/events/inline_loop_video.dart';
 import 'package:chatloom/pages/chat/events/sticker_event.dart';
 import 'package:chatloom/personal/capabilities.dart';
+import 'package:chatloom/personal/media/gif_metadata.dart';
 import 'package:chatloom/personal/stickers/sticker_models.dart';
 import 'package:chatloom/personal/stickers/sticker_send_plan.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -244,6 +246,26 @@ void main() {
         final info = plan.content!['info'] as Map;
         expect(info.containsKey('fi.mau.gif'), isFalse, reason: network);
         expect(info.containsKey('fi.mau.loop'), isFalse, reason: network);
+        expect(info[GifMetadata.marker], isTrue, reason: network);
+        final sent = Event(
+          room: _room(network),
+          eventId: r'$sent-gif',
+          senderId: '@owner:example.invalid',
+          type: EventTypes.Message,
+          originServerTs: DateTime.utc(2026),
+          content: plan.content!,
+        );
+        expect(InlineLoopVideo.applies(sent), isTrue, reason: network);
+        final saved = StickerItem.fromEvent(sent)!;
+        expect(saved.kind, StickerKind.gif);
+        expect(saved.info[GifMetadata.marker], isTrue);
+        expect(
+          GifMetadata.hinted(
+            StickerSendPlan.forRoom(_room(network), saved).content!['info']
+                as Map<String, Object?>,
+          ),
+          isTrue,
+        );
         // A GIF is not a sticker: it keeps the media width.
         expect(info.containsKey(StickerEvents.marker), isFalse);
       }
