@@ -50,6 +50,15 @@ import was removed). Strict design lint adds no debt. The standalone
 presentation harness still lacks its external source snapshot; the captures
 above use the production widgets.
 
+The xcross release of `bc695ee` completed as **2.10.0 (3584)** and was signed,
+installed and launched on the connected iPhone. A fresh USB metadata read
+confirmed build 3584 and preserved visual/media preferences; the new row control
+was also visible on the device. AOT feature markers, all 14 icon PNGs, the
+bridge endpoint, generated AVFoundation player and notification/shake hooks
+were verified. Playback of the user's specific Messenger/Instagram GIF remains
+pending user confirmation and must not be inferred from these checks. The
+known dSYM and CocoaPods-only Share plugin limitations remain.
+
 ## Larger inbox and expanded GIF search (3583)
 
 Conversation rows use 1.5 times the previous avatar, text and vertical geometry
