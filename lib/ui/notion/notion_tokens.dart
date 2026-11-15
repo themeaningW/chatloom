@@ -117,7 +117,6 @@ abstract final class NotionShapes {
 
 /// Inbox readability relative to the original compact conversation rows.
 abstract final class NotionInboxSize {
-  static const magnification = 1.5;
   static const unreadDot = 8.0;
 }
 

@@ -35,7 +35,10 @@ void main() {
       home: Scaffold(
         body: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Align(alignment: Alignment.topCenter, child: row),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SingleChildScrollView(child: row),
+          ),
         ),
       ),
     );
@@ -82,7 +85,7 @@ void main() {
           final time = tester.getRect(find.text('16:36'));
           final ltr = direction == TextDirection.ltr;
           expect(ltr ? avatar.left : width - avatar.right, 32);
-          expect(avatar.width, NotionSize.avatarLg * density * 1.5);
+          expect(avatar.width, NotionSize.avatarLg * density);
           expect(ltr ? width - time.right : time.left, 16);
           expect(
             ltr ? title.left - row.left : row.right - title.right,
@@ -194,10 +197,10 @@ void main() {
       );
       expect(
         name.style!.fontSize,
-        closeTo(NotionType.headline.fontSize! * .875 * 1.5, .01),
+        closeTo(NotionType.headline.fontSize! * .875, .01),
       );
       final avatar = tester.getRect(find.byKey(const ValueKey('avatar')));
-      expect(avatar.width, 63);
+      expect(avatar.width, 42);
       final dot = find.byKey(const ValueKey('notion_inbox_unread_dot'));
       expect(dot, unread ? findsOneWidget : findsNothing);
       if (unread) {
@@ -209,4 +212,44 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  testWidgets('row geometry grows 1.5x while every text size stays unchanged', (
+    tester,
+  ) async {
+    final sizes = <List<double>>[];
+    final rows = <double>[];
+    final avatars = <double>[];
+    for (final factor in [1.0, 1.5]) {
+      await tester.pumpWidget(
+        host(
+          display: NotionDisplayPreferences(inboxRowScale: factor),
+          row: NotionInboxRow(
+            key: const ValueKey('row'),
+            avatar: const SizedBox.expand(key: ValueKey('avatar')),
+            name: 'Ada',
+            preview: 'See you tomorrow',
+            time: '16:36',
+            onTap: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      rows.add(tester.getSize(find.byKey(const ValueKey('row'))).height);
+      avatars.add(tester.getSize(find.byKey(const ValueKey('avatar'))).width);
+      sizes.add([
+        for (final text in ['Ada', 'See you tomorrow', '16:36'])
+          tester.widget<Text>(find.text(text)).style!.fontSize!,
+      ]);
+    }
+    expect(avatars, [42, 63]);
+    // Unscaled text can set the compact row's intrinsic minimum height.
+    expect(rows.last / rows.first, closeTo(1.5, .04));
+    expect(
+      sizes.last,
+      sizes.first,
+      reason: 'The row control must never scale labels or timestamps',
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }

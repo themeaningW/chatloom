@@ -15,9 +15,8 @@ class NotionInboxRow extends StatelessWidget {
     return NotionSpace.xxs +
         NotionSpace.md +
         (display.inboxAvatars
-            ? (NotionSize.avatarLg + NotionSpace.xs) *
-                  display.inboxScale *
-                  NotionInboxSize.magnification
+            ? (NotionSize.avatarLg * display.inboxRowScale + NotionSpace.xs) *
+                  display.inboxScale
             : 0);
   }
 
@@ -103,9 +102,8 @@ class NotionInboxRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final display = NotionDisplayPreferences.of(context);
-    final scale = display.inboxScale * NotionInboxSize.magnification;
-    final textScale =
-        (1 + display.inboxScale) / 2 * NotionInboxSize.magnification;
+    final scale = display.inboxScale * display.inboxRowScale;
+    final textScale = (1 + display.inboxScale) / 2;
     final large = MediaQuery.textScalerOf(context).scale(16) > 22;
     final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
     final colors = context.notion.colors;
@@ -240,7 +238,7 @@ class NotionInboxRow extends StatelessWidget {
                             ),
                           ),
                         if (display.inboxAvatars)
-                          SizedBox(width: NotionSpace.xs * scale),
+                          SizedBox(width: NotionSpace.xs * display.inboxScale),
                         Expanded(
                           child: ExcludeSemantics(
                             child: Column(
@@ -298,7 +296,9 @@ class NotionInboxRow extends StatelessWidget {
                                   ],
                                 ),
                                 if (display.inboxPreviews || typing) ...[
-                                  SizedBox(height: NotionSpace.xs * scale),
+                                  SizedBox(
+                                    height: NotionSpace.xs * display.inboxScale,
+                                  ),
                                   Row(
                                     children: [
                                       if (tag != null) ...[
@@ -407,10 +407,6 @@ class NotionInboxRow extends StatelessWidget {
                                             .notion
                                             .typography
                                             .footnote
-                                            .apply(
-                                              fontSizeFactor:
-                                                  NotionInboxSize.magnification,
-                                            )
                                             .copyWith(
                                               color: secondary,
                                               fontWeight: hasUnread

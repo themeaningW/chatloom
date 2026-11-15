@@ -275,6 +275,7 @@ class _GifResultTileState extends State<GifResultTile>
       unawaited(_release());
     });
     VideoPlayerController? player;
+    var stage = 'media';
     try {
       player = await _createPlayer(generation);
       if (generation != _generation || !mounted) {
@@ -284,16 +285,19 @@ class _GifResultTileState extends State<GifResultTile>
         return;
       }
       _player = player;
+      stage = 'initialize';
       await player.initialize().timeout(NotionContentLoop.initializeTimeout);
       await player.setVolume(0);
       await player.setLooping(true);
       if (generation != _generation || !mounted) return;
+      stage = 'play';
       if (_shouldPlay) await player.play();
       if (mounted && !_disposed && generation == _generation) {
         setState(() {});
       }
-    } catch (_) {
+    } catch (error) {
       if (generation == _generation) {
+        InlineLoopSlots.reportFailure('search', stage, error);
         await _release();
         // The thumbnail stays; a tap still sends.
         if (mounted && !_disposed) setState(() => _failed = true);

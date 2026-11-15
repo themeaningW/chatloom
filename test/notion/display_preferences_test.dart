@@ -15,6 +15,7 @@ void main() {
       );
     }
     expect(NotionDisplayPreferences.standard.inboxScale, .75);
+    expect(NotionDisplayPreferences.standard.inboxRowScale, 1);
     expect(NotionDisplayPreferences.standard.messageTextScale, 1);
     expect(NotionDisplayPreferences.standard.messageAvatars, isTrue);
   });
@@ -22,6 +23,7 @@ void main() {
   test('untrusted stored values clamp geometry and reject invalid types', () {
     final value = NotionDisplayPreferences.fromJson({
       'inboxScale': 40,
+      'inboxRowScale': 40,
       'messageTextScale': -20,
       'messageSpacing': double.nan,
       'bubbleWidth': 'wide',
@@ -32,6 +34,7 @@ void main() {
       'unknownFutureKey': true,
     });
     expect(value.inboxScale, 1);
+    expect(value.inboxRowScale, 1.5);
     expect(value.messageTextScale, .85);
     expect(value.messageSpacing, 1);
     expect(value.bubbleWidth, .78);
@@ -44,6 +47,7 @@ void main() {
   test('all visual choices survive serialization', () {
     const value = NotionDisplayPreferences(
       inboxScale: .9,
+      inboxRowScale: 1.5,
       inboxAvatars: false,
       inboxPreviews: false,
       inboxNetworkBadges: false,
@@ -89,7 +93,11 @@ void main() {
       ),
     );
     expect(observed.first, initial);
-    final updated = initial.copyWith(inboxPreviews: false, bubbleWidth: .9);
+    final updated = initial.copyWith(
+      inboxPreviews: false,
+      bubbleWidth: .9,
+      inboxRowScale: 1.5,
+    );
     await controller.setDisplayPreferences(updated);
     await tester.pump();
     expect(observed.last, updated);

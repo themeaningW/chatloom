@@ -365,17 +365,20 @@ Message bubbles keep their own geometry (`NotionBubble`).
 `iconSm 16 / icon 20 / iconMd 22 / iconLg 24`, avatars `24 / 40 / 56`,
 `dialogMaxWidth 420`, `contentMaxWidth 720`.
 
-Inbox conversation rows retain the saved 75% density preference and apply
-`NotionInboxSize.magnification` (1.5) to avatar, text and vertical geometry:
-the default avatar is now 63 dp. The leading 16 dp gutter reserves an 8 dp
+Inbox conversation rows retain the saved density and original text sizes.
+`inboxRowScale` independently changes avatar and vertical geometry (80–150%,
+default 100%); it never changes names, previews, times or the text gap. The
+default avatar is 42 dp, or 63 dp at 150% with the standard legacy density.
+The leading 16 dp gutter reserves an 8 dp
 accent dot for every unread conversation; read rows keep identical alignment.
 Rows sit `NotionSpace.listGap`
 (4 dp) apart: each list item keeps `NotionSpace.listItem` (half the gap above
 and below) inside its `NotionListMotionItem` and outside the swipe action, so
 adjacent unread or selected highlights never touch, reorder offsets include
-the gap and the swipe pill matches the highlight. Names and previews use
-1.5 times their previous size at the same density. Settings →
-Appearance → Chat list offers a 65–100% row scale, avatars, previews, network
+the gap and the swipe pill matches the highlight. Names and previews use the
+pre-3583 text sizing; the previous density is retained for existing preferences.
+Settings → Appearance → Chat list → Row height & avatars offers the independent
+geometry control alongside avatars, previews, network
 badges, timestamps and unread highlighting. Rows retain a 48 dp minimum tap
 target, grow with accessible text sizes, and preserve unread counts and spoken
 labels when secondary visuals are hidden. Unread conversations use primary,
@@ -397,6 +400,12 @@ foreground, lock, route, viewport and player-budget rules still apply. A global
 unlock/resume signals muted players to re-evaluate, without resuming audible
 media or emitting played receipts. Global viewport coordinates use the Flutter
 view and keyboard occlusion, rather than a nested pane's local MediaQuery size.
+An event GIF/WebP/APNG uses the animated original rather than a pre-generated
+JPEG/PNG poster in `MxcImage`, including a distinct memory-cache source key.
+This stays a timeline preview for transfer limits and protective gates: data
+saver allows unknown-size animations only through its bounded streaming read;
+known oversized originals retain explicit loading. Motion/autoplay gates control
+frame advancement after decoding; opening the full-screen viewer is unnecessary.
 
 ### Transitional static API
 

@@ -3,6 +3,53 @@
 Branch: `feat/apple-ux-paste-beta`, based on the shared iOS/reels integration
 `302b2af`. The application code remains shared across platform runners.
 
+## Original typography, adjustable rows and inline animation (3584)
+
+This corrects build 3583's over-large labels. Names, message previews and times
+return to their pre-3583 sizes. **Settings → Appearance → Chat list → Row height
+& avatars** changes geometry alone (80–150%, default 100%). At standard density
+the avatar is 42 points at 100% and 63 at 150%; text, metadata and the gap
+between name and preview remain unchanged. Legacy density preferences persist.
+Leading unread dots and the primary/bold unread styling remain available.
+
+The GIF follow-up fixes the image-source path, not just the native MP4 player:
+the production timeline `ImageBubble` previously passed thumbnail mode to
+`MxcImage`, which selected the bridge's static JPEG/PNG poster even when the
+original was an animated GIF/WebP. These formats now decode their original
+image source and use a distinct animation cache key. Their on-screen frame
+stream starts without opening a viewer or tapping a play button. Autoplay-off,
+Reduce Motion, hidden surfaces, protective metadata and bounded transfers
+remain effective. Unknown-size animations use a bounded read in data saver;
+known oversized files retain explicit loading. Native MP4 loops also record
+technical failure stage/code in the local problem log, without message text,
+contacts, media URLs or exception payloads.
+
+This covers both forms emitted by the upstream Meta converter: MP4 loops and
+animated image/sticker sources. Reference:
+[Meta media conversion](https://github.com/mautrix/meta/blob/main/pkg/msgconv/mediadl/reupload.go),
+[Instagram animated attachments](https://github.com/mautrix/meta/blob/main/pkg/msgconv/igconv/from-instagram.go).
+
+Production captures with fictional contacts:
+[100%, dark](apple-ux-beta/inbox-geometry-default-dark.png),
+[150%, dark](apple-ux-beta/inbox-geometry-large-dark.png),
+[100%, light](apple-ux-beta/inbox-geometry-default-light.png),
+[150%, light](apple-ux-beta/inbox-geometry-large-light.png).
+
+USB inspection confirmed the reported phone had 3583 installed, autoplay on,
+thumbnails on and Reduce Motion off. The sampled system log did not provide a
+GIF decoder failure; it is not proof of playback. Native device acceptance of
+3584 is recorded separately from Windows widget/codec checks.
+
+155 regressions pass, including real GIF/WebP frame advancement inside the
+production timeline bubble, static-poster bypass, bounded unknown-size reads,
+explicit autoplay/data-saver/motion gates, preference persistence, unchanged
+font sizes across row scales, keyboard/viewport layouts, cache isolation and
+audible-player coordination. All 12 focused source/test paths analyze cleanly;
+full app analysis has zero errors/warnings and 69 existing infos (one obsolete
+import was removed). Strict design lint adds no debt. The standalone
+presentation harness still lacks its external source snapshot; the captures
+above use the production widgets.
+
 ## Larger inbox and expanded GIF search (3583)
 
 Conversation rows use 1.5 times the previous avatar, text and vertical geometry

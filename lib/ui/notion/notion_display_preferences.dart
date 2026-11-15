@@ -53,6 +53,7 @@ class NotionDisplayPreferences
     extends ThemeExtension<NotionDisplayPreferences> {
   const NotionDisplayPreferences({
     this.inboxScale = .75,
+    this.inboxRowScale = 1,
     this.inboxAvatars = true,
     this.inboxPreviews = true,
     this.inboxNetworkBadges = true,
@@ -79,8 +80,15 @@ class NotionDisplayPreferences
   });
 
   static const standard = NotionDisplayPreferences();
+  static const minInboxRowScale = .8;
+  static const maxInboxRowScale = 1.5;
 
+  /// Legacy density retained for existing text sizing; new row controls do
+  /// not change it or the user's font sizes.
   final double inboxScale;
+
+  /// Geometry only: avatar diameter and row height, relative to old density.
+  final double inboxRowScale;
   final bool inboxAvatars;
   final bool inboxPreviews;
   final bool inboxNetworkBadges;
@@ -143,6 +151,12 @@ class NotionDisplayPreferences
 
     return NotionDisplayPreferences(
       inboxScale: number('inboxScale', .75, .65, 1),
+      inboxRowScale: number(
+        'inboxRowScale',
+        1,
+        minInboxRowScale,
+        maxInboxRowScale,
+      ),
       inboxAvatars: flag('inboxAvatars', true),
       inboxPreviews: flag('inboxPreviews', true),
       inboxNetworkBadges: flag('inboxNetworkBadges', true),
@@ -199,6 +213,7 @@ class NotionDisplayPreferences
 
   Map<String, dynamic> toJson() => {
     'inboxScale': inboxScale,
+    'inboxRowScale': inboxRowScale,
     'inboxAvatars': inboxAvatars,
     'inboxPreviews': inboxPreviews,
     'inboxNetworkBadges': inboxNetworkBadges,
@@ -229,6 +244,7 @@ class NotionDisplayPreferences
   @override
   NotionDisplayPreferences copyWith({
     double? inboxScale,
+    double? inboxRowScale,
     bool? inboxAvatars,
     bool? inboxPreviews,
     bool? inboxNetworkBadges,
@@ -254,6 +270,7 @@ class NotionDisplayPreferences
     double? wallpaperStrength,
   }) => NotionDisplayPreferences.fromJson({
     'inboxScale': inboxScale ?? this.inboxScale,
+    'inboxRowScale': inboxRowScale ?? this.inboxRowScale,
     'inboxAvatars': inboxAvatars ?? this.inboxAvatars,
     'inboxPreviews': inboxPreviews ?? this.inboxPreviews,
     'inboxNetworkBadges': inboxNetworkBadges ?? this.inboxNetworkBadges,
@@ -292,6 +309,7 @@ class NotionDisplayPreferences
       identical(this, other) ||
       other is NotionDisplayPreferences &&
           inboxScale == other.inboxScale &&
+          inboxRowScale == other.inboxRowScale &&
           inboxAvatars == other.inboxAvatars &&
           inboxPreviews == other.inboxPreviews &&
           inboxNetworkBadges == other.inboxNetworkBadges &&
@@ -319,6 +337,7 @@ class NotionDisplayPreferences
   @override
   int get hashCode => Object.hashAll([
     inboxScale,
+    inboxRowScale,
     inboxAvatars,
     inboxPreviews,
     inboxNetworkBadges,

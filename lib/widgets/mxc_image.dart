@@ -389,6 +389,10 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
   bool _deferOriginal(Event event, bool thumbnail) {
     if (!_automaticOriginal(event, thumbnail)) return false;
     final size = event.infoMap['size'];
+    // Animated originals with missing size still get a bounded automatic
+    // read; the streaming limit aborts at the data-saver budget. A known
+    // oversized animation, like any photo, still requires an explicit load.
+    if (_prefersAnimatedOriginal && (size is! int || size <= 0)) return false;
     return size is! int || size <= 0 || size > _maxAutomaticOriginalBytes;
   }
 
@@ -612,7 +616,7 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
           ? _thumbnailSide(widget.height == null ? null : widget.height! * dpr)
           : null,
       widget.isThumbnail,
-      widget.animated,
+      _prefersAnimatedOriginal,
       widget.thumbnailMethod,
       widget.loadBytes,
       widget.encryption,
@@ -622,6 +626,15 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
 
   bool get _usesSizedThumbnail =>
       widget.uri != null && widget.encryption == null && widget.isThumbnail;
+
+  /// Bridge thumbnails are JPEG/PNG posters, even when the original is a GIF
+  /// or animated WebP. Decode the image source, not its baked first frame.
+  /// Keep thumbnail transfer/data-saver limits and access gates in force.
+  bool get _prefersAnimatedOriginal =>
+      widget.animated ||
+      const {'image/gif', 'image/webp', 'image/apng'}.contains(
+        widget.event?.attachmentMimetype.toLowerCase().split(';').first.trim(),
+      );
 
   Future<void> _load(int generation) async {
     final client = _client();
@@ -736,7 +749,10 @@ class _MxcImageState extends State<MxcImage> with WidgetsBindingObserver {
         event.attachmentMimetype,
       );
       final useThumbnail =
-          widget.isThumbnail && event.hasThumbnail && !lottieMime;
+          widget.isThumbnail &&
+          event.hasThumbnail &&
+          !lottieMime &&
+          !_prefersAnimatedOriginal;
       // Scanner downloads cannot use our transport callback. Defer an
       // oversized original before invoking that path; its SDK access gate
       // still runs when the user explicitly requests it.

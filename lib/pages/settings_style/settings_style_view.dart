@@ -10,7 +10,6 @@ import 'package:chatloom/pages/chat/conversation_bubble.dart';
 import 'package:chatloom/pages/chat/conversation_grouping.dart';
 import 'package:chatloom/personal/ui/notion_inbox_row.dart';
 import 'package:chatloom/ui/notion/notion.dart';
-import 'package:chatloom/ui/notion/notion_display_preferences.dart';
 import 'package:chatloom/utils/account_config.dart';
 import 'package:chatloom/widgets/matrix.dart';
 import 'package:material_ui/material_ui.dart';
@@ -735,12 +734,12 @@ class _DisplaySettings extends StatelessWidget {
         ),
         const NotionSectionHeader(title: 'Chat list'),
         slider(
-          'Row size',
-          value.inboxScale,
-          .65,
-          1,
-          7,
-          (v) => update(value.copyWith(inboxScale: v)),
+          'Row height & avatars',
+          value.inboxRowScale,
+          NotionDisplayPreferences.minInboxRowScale,
+          NotionDisplayPreferences.maxInboxRowScale,
+          14,
+          (v) => update(value.copyWith(inboxRowScale: v)),
         ),
         toggle(
           'Avatars',

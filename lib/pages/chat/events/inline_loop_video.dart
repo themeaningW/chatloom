@@ -321,6 +321,7 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
       unawaited(_release());
     });
     VideoPlayerController? player;
+    var stage = 'media';
     try {
       player = await _createPlayer(generation);
       if (generation != _generation || !mounted) {
@@ -330,16 +331,19 @@ class _InlineLoopVideoState extends State<InlineLoopVideo>
         return;
       }
       _player = player;
+      stage = 'initialize';
       await player.initialize().timeout(NotionContentLoop.initializeTimeout);
       await player.setVolume(0);
       await player.setLooping(true);
       if (generation != _generation || !mounted) return;
+      stage = 'play';
       if (_shouldPlay) await player.play();
       if (mounted && !_disposed && generation == _generation) {
         setState(() {});
       }
-    } catch (_) {
+    } catch (error) {
       if (generation == _generation) {
+        InlineLoopSlots.reportFailure('timeline', stage, error);
         await _release();
         // Not playable here (codec, download): the poster stays, a tap
         // still opens the viewer.

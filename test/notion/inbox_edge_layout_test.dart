@@ -31,6 +31,7 @@ void main() {
     double scale = 1,
     EdgeInsets safe = const EdgeInsets.only(top: 59, bottom: 34),
     Brightness brightness = Brightness.dark,
+    double rowScale = 1,
     bool split = false,
     TextDirection direction = TextDirection.ltr,
     ValueChanged<EdgeInsets>? onSidePadding,
@@ -40,12 +41,18 @@ void main() {
     addTearDown(tester.view.reset);
     final scroll = ScrollController();
     addTearDown(scroll.dispose);
+    final theme = NotionTheme.build(
+      brightness,
+    ).copyWith(platform: TargetPlatform.iOS);
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: NotionTheme.build(
-          brightness,
-        ).copyWith(platform: TargetPlatform.iOS),
+        theme: theme.copyWith(
+          extensions: [
+            ...theme.extensions.values,
+            NotionDisplayPreferences(inboxRowScale: rowScale),
+          ],
+        ),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             padding: safe,
@@ -257,5 +264,40 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });
+  }
+  for (final brightness in Brightness.values) {
+    for (final factor in [1.0, 1.5]) {
+      testWidgets('geometry ${factor}x capture ${brightness.name}', (
+        tester,
+      ) async {
+        await mount(
+          tester,
+          size: const Size(430, 932),
+          brightness: brightness,
+          rowScale: factor,
+        );
+        final directory =
+            Platform.environment['CHATLOOM_ROW_GEOMETRY_CAPTURE_DIR'];
+        if (directory != null) {
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(const ValueKey('capture-inbox-edge')),
+          );
+          await tester.runAsync(() async {
+            final image = await boundary.toImage(pixelRatio: 2);
+            final bytes = await image.toByteData(
+              format: ui.ImageByteFormat.png,
+            );
+            final file = File(
+              '$directory/inbox-geometry-${factor == 1 ? 'default' : 'large'}-${brightness.name}.png',
+            );
+            await file.parent.create(recursive: true);
+            await file.writeAsBytes(bytes!.buffer.asUint8List());
+            image.dispose();
+          });
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
   }
 }

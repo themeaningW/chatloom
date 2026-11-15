@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:matrix/matrix.dart' show Logs;
 
 /// The app-wide budget of native muted-loop players (timeline GIFs and
 /// video stickers, GIF search results in the composer panel): at most
@@ -13,6 +15,13 @@ abstract final class InlineLoopSlots {
 
   /// Players alive now.
   static int get live => _live.length;
+
+  /// Technical failure only: no event, contact, URL, payload or exception
+  /// message. The existing local problem report can diagnose a static poster.
+  static void reportFailure(String surface, String stage, Object error) {
+    final code = error is PlatformException ? error.code : error.runtimeType;
+    Logs().w('Inline GIF $surface failed at $stage ($code)');
+  }
 
   /// Takes a slot for [owner]. When all are taken, the oldest owner is
   /// removed first and told to give way ([giveWay] of that owner runs
